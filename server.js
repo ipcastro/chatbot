@@ -2,9 +2,33 @@ require('dotenv').config();
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Configuração CORS mais permissiva para debugging
+app.use(cors({
+    origin: '*', // Permite todas as origens durante o desenvolvimento
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
+
+// Middleware adicional para garantir headers CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
+    // Responder imediatamente às solicitações OPTIONS
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    
+    next();
+});
 
 // Configuração do Express
 app.use(express.json());
@@ -84,5 +108,3 @@ app.listen(port, () => {
         console.warn('Por favor, crie um arquivo .env com sua chave API para produção.');
     }
 });
-
-app.use(express.static('public'));

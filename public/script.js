@@ -38,14 +38,30 @@ function removeTypingIndicator() {
 function addMessage(message, isUser = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
-    messageDiv.textContent = message;
+    
+    // Gerar timestamp
+    const timestamp = new Date().toLocaleTimeString();
+    
+    // Converter strings de texto com quebras de linha em HTML com <br>
+    if (typeof message === 'string') {
+        messageDiv.innerHTML = message.replace(/\n/g, '<br>');
+    } else {
+        messageDiv.textContent = message;
+    }
+    
+    // Adicionar timestamp à mensagem
+    const timestampSpan = document.createElement('span');
+    timestampSpan.className = 'message-timestamp';
+    timestampSpan.textContent = timestamp;
+    messageDiv.appendChild(timestampSpan);
+    
     chatMessages.appendChild(messageDiv);
     
     // Adiciona ao histórico de exibição
     conversationHistory.push({ 
         message, 
         isUser,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: timestamp
     });
     
     scrollToBottom();
@@ -56,8 +72,28 @@ function showError(message) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'message error-message';
     errorDiv.textContent = message;
+    
+    // Adicionar timestamp à mensagem de erro
+    const timestamp = new Date().toLocaleTimeString();
+    const timestampSpan = document.createElement('span');
+    timestampSpan.className = 'message-timestamp';
+    timestampSpan.textContent = timestamp;
+    errorDiv.appendChild(timestampSpan);
+    
     chatMessages.appendChild(errorDiv);
     scrollToBottom();
+}
+
+// Função para verificar se uma mensagem está relacionada a hora/data
+function isTimeRelatedQuestion(message) {
+    const timeQuestions = [
+        "que horas são", "horas", "horário", "que dia é hoje", "data", 
+        "dia de hoje", "data atual", "dia atual", "hora atual", "data de hoje", 
+        "hora agora", "que horas", "hora exata", "me diga as horas", 
+        "pode me dizer que horas são", "diga a hora"
+    ];
+    
+    return timeQuestions.some(q => message.toLowerCase().includes(q.toLowerCase()));
 }
 
 // Função para enviar mensagem ao servidor
@@ -78,8 +114,13 @@ async function sendMessage() {
     showTypingIndicator();
     
     try {
+        // Log para debug - verificar se é uma pergunta relacionada a tempo
+        if (isTimeRelatedQuestion(message)) {
+            console.log("Detectada pergunta relacionada a horário/data:", message);
+        }
+        
         // Envia a mensagem para o servidor com o histórico da API
-        const response = await fetch('https://chatbot-dny3.onrender.com/chat', {
+        const response = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -97,6 +138,7 @@ async function sendMessage() {
         }
         
         const data = await response.json();
+        console.log("Resposta do servidor:", data);
         
         // Atualiza o histórico da API
         apiChatHistory = data.history;
@@ -113,6 +155,24 @@ async function sendMessage() {
         sendButton.disabled = false;
         sendButton.textContent = 'Enviar';
         userInput.focus();
+    }
+}
+
+// Função para testar diretamente a função de hora
+async function testTimeFunction() {
+    try {
+        const response = await fetch('/check-time');
+        const data = await response.json();
+        console.log("Teste de hora:", data);
+        
+        if (data.success) {
+            alert(`Função de horário está funcionando corretamente!\n\nHora atual: ${data.data.currentTime}`);
+        } else {
+            alert(`Erro na função de horário: ${data.error}`);
+        }
+    } catch (error) {
+        console.error("Erro ao testar função de hora:", error);
+        alert("Não foi possível testar a função de horário");
     }
 }
 
@@ -138,7 +198,19 @@ function showHistory() {
         conversationHistory.forEach(msg => {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${msg.isUser ? 'user-message' : 'bot-message'}`;
-            messageDiv.textContent = msg.message;
+            
+            if (typeof msg.message === 'string') {
+                messageDiv.innerHTML = msg.message.replace(/\n/g, '<br>');
+            } else {
+                messageDiv.textContent = msg.message;
+            }
+            
+            // Adicionar timestamp ao restaurar as mensagens
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'message-timestamp';
+            timestampSpan.textContent = msg.timestamp;
+            messageDiv.appendChild(timestampSpan);
+            
             chatMessages.appendChild(messageDiv);
         });
     };
@@ -181,7 +253,12 @@ function addMessageGroup(subject, messages) {
     messages.forEach(msg => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `history-message ${msg.isUser ? 'user-message' : 'bot-message'}`;
-        messageDiv.textContent = msg.message;
+        
+        if (typeof msg.message === 'string') {
+            messageDiv.innerHTML = msg.message.replace(/\n/g, '<br>');
+        } else {
+            messageDiv.textContent = msg.message;
+        }
         
         // Adiciona timestamp às mensagens no histórico
         const timestampSpan = document.createElement('span');
@@ -208,14 +285,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     historyButton.addEventListener('click', showHistory);
     
+    // Adicionar botão de teste de hora (apenas em desenvolvimento)
+    const testButton = document.createElement('button');
+    testButton.textContent = 'Testar Hora';
+    testButton.className = 'test-button';
+    testButton.style.position = 'fixed';
+    testButton.style.bottom = '10px';
+    testButton.style.right = '10px';
+    testButton.style.zIndex = '1000';
+    testButton.style.padding = '8px 15px';
+    testButton.style.background = '#a1887f';
+    testButton.addEventListener('click', testTimeFunction);
+    document.body.appendChild(testButton);
+    
     // Inicializar o histórico de conversa com a mensagem de boas-vindas
     if (conversationHistory.length === 0) {
         const welcomeMessage = document.querySelector('.message.bot-message');
         if (welcomeMessage) {
+            // Adicionar timestamp à mensagem de boas-vindas existente
+            const timestamp = new Date().toLocaleTimeString();
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'message-timestamp';
+            timestampSpan.textContent = timestamp;
+            welcomeMessage.appendChild(timestampSpan);
+            
             conversationHistory.push({
                 message: welcomeMessage.textContent,
                 isUser: false,
-                timestamp: new Date().toLocaleTimeString()
+                timestamp: timestamp
             });
         }
     }

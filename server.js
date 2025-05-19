@@ -22,40 +22,163 @@ app.post('/chat', async (req, res) => {
     const { message, history = [] } = req.body;
     console.log("\n--- Nova Mensagem ---");
     console.log("Mensagem do usuário:", message);
-    if (history) {
-        // console.log("Histórico recebido (primeiro e último item se houver):", history.length > 0 ? [history[0], history[history.length -1]] : "vazio");
+
+    // Detecta perguntas sobre data/hora e responde direto do servidor
+    const msgLower = message.trim().toLowerCase();
+    
+    // Palavras-chave em português para data/hora
+    const palavrasDataHoraPT = [
+      "que horas são", "qual a hora", "me diga a hora", "me diga as horas",
+      "que dia é hoje", "qual a data", "data de hoje", "hora atual", "data atual",
+      "horas", "horário", "dia de hoje", "dia atual", "hora agora", "que horas",
+      "hora exata", "me diga as horas", "pode me dizer que horas são", "diga a hora",
+      "que data e hora", "data e hora", "hora e data", "que dia e hora", "dia e hora",
+      "hora e dia", "me diga a data e hora", "me diga a hora e data", "me diga o dia e hora",
+      "me diga a hora e dia", "me diga o horário", "me diga o dia", "me diga a data"
+    ];
+
+    // Palavras-chave em inglês para data/hora
+    const palavrasDataHoraEN = [
+      "what time", "what's the time", "tell me the time",
+      "what day", "what's the date", "tell me the date",
+      "current time", "current date", "what time is it",
+      "what day is it", "what's today", "what's the current time"
+    ];
+
+    // Palavras-chave para clima
+    const palavrasClima = [
+      "clima", "tempo", "previsão", "temperatura", "chuva",
+      "weather", "forecast", "temperature", "rain", "frio",
+      "calor", "umidade", "vento", "nublado", "ensolarado"
+    ];
+
+    // Verifica se é uma pergunta sobre clima
+    const isClimaQuestion = palavrasClima.some(palavra => msgLower.includes(palavra));
+
+    // Se for pergunta sobre clima, responde diretamente
+    if (isClimaQuestion) {
+      // Extrai o nome da cidade da mensagem
+      const cidadeMatch = msgLower.match(/(?:clima|tempo|previsão|weather|forecast)(?:\s+de|\s+em|\s+para)?\s+([^,.!?]+)/i);
+      const cidade = cidadeMatch ? cidadeMatch[1].trim() : null;
+
+      if (!cidade) {
+        return res.json({
+          response: "Me diga qual cidade você quer saber o clima, meu amor! 💕",
+          history: history
+        });
+      }
+
+      try {
+        const weatherData = await getWeather({ location: cidade });
+        
+        if (weatherData.error) {
+          return res.json({
+            response: weatherData.error,
+            history: history
+          });
+        }
+
+        // Formata a resposta de forma amigável
+        let response = `Em ${weatherData.location} agora está:\n\n`;
+        response += `🌡️ Temperatura: ${weatherData.temperature}°C\n`;
+        response += `🌤️ ${weatherData.description.charAt(0).toUpperCase() + weatherData.description.slice(1)}\n`;
+        response += `💨 Vento: ${weatherData.windSpeed} km/h\n`;
+        response += `💧 Umidade: ${weatherData.humidity}%\n`;
+        
+        if (weatherData.feelsLike !== weatherData.temperature) {
+          response += `🌡️ Sensação térmica: ${weatherData.feelsLike}°C\n`;
+        }
+
+        // Sugere uma música baseada no clima
+        response += "\nQue tal ouvirmos uma música que combine com esse clima? 🎵 Posso te ajudar a encontrar uma música específica ou explorar um gênero que você goste!";
+        
+        return res.json({
+          response: response,
+          history: history
+        });
+      } catch (error) {
+        console.error("Erro ao obter clima:", error);
+        return res.json({
+          response: "Desculpe, meu amor! 💕 Não consegui verificar o clima agora. Pode tentar novamente em alguns instantes?",
+          history: history
+        });
+      }
     }
 
+    // Verifica se é uma pergunta sobre data/hora
+    const isDataHoraQuestion = palavrasDataHoraPT.some(q => msgLower.includes(q)) ||
+                             palavrasDataHoraEN.some(q => msgLower.includes(q));
+
+    // Verifica se a mensagem é uma pergunta
+    const isQuestion = msgLower.includes("?") || 
+                      msgLower.startsWith("what") || 
+                      msgLower.startsWith("que") || 
+                      msgLower.startsWith("qual") ||
+                      msgLower.startsWith("me diga") ||
+                      msgLower.startsWith("tell me");
+
+    // Verifica se a mensagem contém menção a getCurrentTime ou aguardando execução
+    const contemMencaoGetCurrentTime = msgLower.includes("getcurrenttime") || 
+                                     msgLower.includes("aguardando execução") ||
+                                     msgLower.includes("awaiting execution");
+
+    if ((isDataHoraQuestion && isQuestion) || contemMencaoGetCurrentTime) {
+      const timeData = getCurrentTime();
+      const isDataQuestion = msgLower.includes("dia") || msgLower.includes("data") || 
+                           msgLower.includes("date") || msgLower.includes("day");
+      const isHoraQuestion = msgLower.includes("hora") || msgLower.includes("horário") || 
+                           msgLower.includes("time") || msgLower.includes("hour");
+      
+      let response = "";
+      if (isDataQuestion && isHoraQuestion) {
+        response = `Agora são ${timeData.currentTime} 🕒`;
+      } else if (isDataQuestion) {
+        response = `Hoje é ${timeData.dayOfWeek}, ${timeData.dayOfMonth} de ${timeData.month} de ${timeData.year} 📅`;
+      } else {
+        response = `Agora são ${timeData.hours}:${timeData.minutes.toString().padStart(2, '0')}:${timeData.seconds.toString().padStart(2, '0')} 🕒`;
+      }
+      
+      // Adiciona uma resposta mais amigável e musical
+      response += "\n\nQue tal ouvirmos uma música para celebrar esse momento? 🎵 Posso te ajudar a encontrar uma música específica ou explorar um gênero que você goste!";
+      
+      return res.json({
+        response: response,
+        history: history
+      });
+    }
 
     const model = genAI.getGenerativeModel({
       model: modelName,
-      tools: [{ functionDeclarations }],
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-    });
-
-    const chat = model.startChat({
-      history: history, // O histórico já foi sanitizado para [] se undefined
-      generationConfig: {
+      tools: [{
+        functionDeclarations: functionDeclarations
+      }],
+      generation_config: { 
         temperature: 0.7,
+        top_p: 0.8,
+        top_k: 40
       },
     });
 
-    let currentApiRequestContents;
+    const chat = model.startChat({
+      history: history,
+      generationConfig: {
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 40
+      },
+    });
+
+    // Adiciona a instrução do sistema como primeira mensagem
+    await chat.sendMessage(systemInstruction);
+
+    let currentApiRequestContents = message;
     let modelResponse;
     let loopCount = 0;
     const MAX_FUNCTION_CALL_LOOPS = 5;
 
-    // Primeira chamada com a mensagem do usuário
-    currentApiRequestContents = message;
-
     while (loopCount < MAX_FUNCTION_CALL_LOOPS) {
       loopCount++;
       console.log(`[CHAT_LOOP ${loopCount}] Enviando para o modelo. Tipo do input: ${typeof currentApiRequestContents}`);
-      if (typeof currentApiRequestContents !== 'string') {
-        // console.log("[CHAT_LOOP] Conteúdo (partes de função):", JSON.stringify(currentApiRequestContents, null, 2).substring(0, 300) + "...");
-      } else {
-        // console.log("[CHAT_LOOP] Conteúdo (mensagem):", currentApiRequestContents.substring(0,300));
-      }
 
       let result;
       try {
@@ -63,41 +186,55 @@ app.post('/chat', async (req, res) => {
       } catch (sdkError) {
         console.error(`[SDK_ERROR] Erro ao chamar chat.sendMessage na iteração ${loopCount}:`, sdkError);
         console.error("[SDK_ERROR] Stack:", sdkError.stack);
-        // Tenta enviar uma mensagem de erro baseada no que o SDK retornou, se possível.
         const errorResponseText = sdkError.message || "Ocorreu um erro ao comunicar com a IA.";
-        const currentHistory = await chat.getHistory(); // Pega o histórico até o ponto do erro
+        const currentHistory = await chat.getHistory();
         return res.status(500).json({ response: errorResponseText, history: currentHistory, error: "SDK Error" });
       }
       
-      console.log(`[CHAT_LOOP ${loopCount}] Resposta recebida do modelo.`);
-      // console.log("[DEBUG] Objeto 'result' completo de sendMessage:", JSON.stringify(result, null, 2)); // LOG MUITO VERBOSO, DESCOMENTE SE NECESSÁRIO
-
       if (!result || !result.response) {
-          console.error(`[PANIC_RESPONSE] result ou result.response está undefined/null após sendMessage na iteração ${loopCount}.`);
-          console.error("[PANIC_RESPONSE] Conteúdo de result:", JSON.stringify(result, null, 2));
-          const historySoFar = await chat.getHistory();
-          return res.status(500).json({ response: "Erro crítico: A IA não retornou uma resposta válida.", history: historySoFar, error: "Invalid AI Response" });
+        console.error(`[PANIC_RESPONSE] result ou result.response está undefined/null após sendMessage na iteração ${loopCount}.`);
+        console.error("[PANIC_RESPONSE] Conteúdo de result:", JSON.stringify(result, null, 2));
+        const historySoFar = await chat.getHistory();
+        return res.status(500).json({ response: "Erro crítico: A IA não retornou uma resposta válida.", history: historySoFar, error: "Invalid AI Response" });
       }
+
       modelResponse = result.response;
-      // console.log(`[CHAT_LOOP ${loopCount}] modelResponse (result.response):`, JSON.stringify(modelResponse, null, 2)); // LOG VERBOSO
-
-      // Verifica se functionCalls existe e é uma função
-      if (typeof modelResponse.functionCalls !== 'function') {
-        console.log(`[CHAT_LOOP ${loopCount}] modelResponse.functionCalls não é uma função. Assumindo resposta textual.`);
-        break; 
+      
+      // Verifica se a resposta do modelo contém menção a getCurrentTime
+      let responseText = "";
+      if (modelResponse && typeof modelResponse.text === 'function') {
+        responseText = modelResponse.text();
+      } else if (modelResponse && modelResponse.candidates && modelResponse.candidates[0]?.content?.parts) {
+        responseText = modelResponse.candidates[0].content.parts
+          .filter(part => part.text)
+          .map(part => part.text)
+          .join("");
       }
 
-      const functionCallRequests = modelResponse.functionCalls();
+      // Se a resposta contém menção a getCurrentTime, substitui pela data/hora atual
+      if (responseText.toLowerCase().includes("getcurrenttime") || 
+          responseText.toLowerCase().includes("aguardando execução") ||
+          responseText.toLowerCase().includes("awaiting execution")) {
+        const timeData = getCurrentTime();
+        responseText = `Agora são ${timeData.currentTime} 🕒\n\nQue tal ouvirmos uma música para celebrar esse momento? 🎵 Posso te ajudar a encontrar uma música específica ou explorar um gênero que você goste!`;
+        return res.json({
+          response: responseText,
+          history: history
+        });
+      }
 
-      if (!functionCallRequests || functionCallRequests.length === 0) {
+      // Verifica se há chamadas de função na resposta
+      const functionCalls = modelResponse.functionCalls?.() || [];
+      
+      if (!functionCalls || functionCalls.length === 0) {
         console.log(`[CHAT_LOOP ${loopCount}] Nenhuma chamada de função pendente nesta resposta.`);
-        break; 
+        break;
       }
 
-      console.log(`[CHAT_LOOP ${loopCount}] Chamadas de função requisitadas (${functionCallRequests.length}):`, JSON.stringify(functionCallRequests.map(fc => fc.name)));
+      console.log(`[CHAT_LOOP ${loopCount}] Chamadas de função requisitadas:`, JSON.stringify(functionCalls, null, 2));
 
       const functionExecutionResponses = [];
-      for (const call of functionCallRequests) {
+      for (const call of functionCalls) {
         const functionToCall = availableFunctions[call.name];
         if (functionToCall) {
           try {
@@ -105,53 +242,59 @@ app.post('/chat', async (req, res) => {
             const functionResultData = await functionToCall(call.args);
             console.log(`[FUNC_EXEC] Resultado de ${call.name}:`, JSON.stringify(functionResultData).substring(0,200) + "...");
             functionExecutionResponses.push({
-              functionResponse: { name: call.name, response: functionResultData },
+              functionResponse: { 
+                name: call.name, 
+                response: functionResultData 
+              }
             });
           } catch (funcError) {
             console.error(`[FUNC_ERROR] Erro ao executar ${call.name}:`, funcError);
             functionExecutionResponses.push({
-              functionResponse: { name: call.name, response: { error: `Erro interno ao executar ${call.name}: ${funcError.message}` } },
+              functionResponse: { 
+                name: call.name, 
+                response: { error: `Erro interno ao executar ${call.name}: ${funcError.message}` } 
+              }
             });
           }
         } else {
           console.error(`[FUNC_ERROR] Função ${call.name} não implementada.`);
           functionExecutionResponses.push({
-            functionResponse: { name: call.name, response: { error: "Função não implementada no servidor." } },
+            functionResponse: { 
+              name: call.name, 
+              response: { error: "Função não implementada no servidor." } 
+            }
           });
         }
       }
 
       if (functionExecutionResponses.length > 0) {
-        currentApiRequestContents = functionExecutionResponses; 
+        currentApiRequestContents = functionExecutionResponses;
       } else {
         console.log(`[CHAT_LOOP ${loopCount}] Nenhuma resposta de função processada, saindo do loop.`);
         break;
       }
-    } 
+    }
 
     if (loopCount >= MAX_FUNCTION_CALL_LOOPS) {
-        console.warn("[CHAT_LOOP_MAX] Loop de chamadas de função atingiu o limite máximo.");
+      console.warn("[CHAT_LOOP_MAX] Loop de chamadas de função atingiu o limite máximo.");
     }
 
     let responseText = "";
     if (modelResponse && typeof modelResponse.text === 'function') {
-        responseText = modelResponse.text();
+      responseText = modelResponse.text();
     } else if (modelResponse && modelResponse.candidates && modelResponse.candidates[0]?.content?.parts) {
-        // Fallback para extrair texto se modelResponse.text() não estiver disponível
-        responseText = modelResponse.candidates[0].content.parts.filter(part => part.text).map(part => part.text).join("");
-        if (!responseText) {
-             console.warn("[TEXT_EXTRACTION] Não foi possível extrair texto de modelResponse.candidates. Verifique a estrutura.");
-             // console.log("[DEBUG] modelResponse para extração de texto com falha:", JSON.stringify(modelResponse, null, 2));
-        }
+      responseText = modelResponse.candidates[0].content.parts
+        .filter(part => part.text)
+        .map(part => part.text)
+        .join("");
     } else {
-        console.error("[TEXT_EXTRACTION_FAIL] Não foi possível obter texto final de modelResponse. Estrutura:", JSON.stringify(modelResponse, null, 2));
-        responseText = "Desculpe, tive um problema ao gerar a resposta final.";
+      console.error("[TEXT_EXTRACTION_FAIL] Não foi possível obter texto final de modelResponse.");
+      responseText = "Desculpe, tive um problema ao gerar a resposta final.";
     }
 
     console.log("[FINAL_RESPONSE] Texto para o usuário:", responseText.substring(0,300) + "...");
 
     const updatedHistory = await chat.getHistory();
-    // console.log("[HISTORY_UPDATE] Histórico atualizado para enviar ao cliente (primeiro e último):", updatedHistory.length > 0 ? [updatedHistory[0], updatedHistory[updatedHistory.length -1]] : "vazio");
 
     res.json({
       response: responseText,
@@ -161,24 +304,21 @@ app.post('/chat', async (req, res) => {
   } catch (error) {
     console.error("===== ERRO GERAL NA ROTA /chat =====");
     console.error("Mensagem do Erro:", error.message);
-    console.error("Stack Trace do Erro:", error.stack); // ESSENCIAL!
+    console.error("Stack Trace do Erro:", error.stack);
     
-    // Tenta pegar o histórico atual se possível, mesmo em erro
-    let errorHistory = req.body.history || []; // Pega o histórico que veio na requisição
+    let errorHistory = req.body.history || [];
     try {
-        if (typeof chat !== 'undefined' && chat && typeof chat.getHistory === 'function') { // Verifica se chat foi inicializado
-            errorHistory = await chat.getHistory();
-        }
+      if (typeof chat !== 'undefined' && chat && typeof chat.getHistory === 'function') {
+        errorHistory = await chat.getHistory();
+      }
     } catch (historyError) {
-        console.error("Erro ao tentar obter histórico durante o tratamento de erro:", historyError.message);
+      console.error("Erro ao tentar obter histórico durante o tratamento de erro:", historyError.message);
     }
 
     res.status(500).json({
       response: `Desculpe, ocorreu um erro interno no servidor: ${error.message}. Por favor, tente novamente.`,
-      history: errorHistory, // Envia o histórico que temos até o momento do erro
-      error: error.message || "Erro desconhecido",
-      // Em desenvolvimento, você pode querer enviar o stack, mas NUNCA em produção.
-      // stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+      history: errorHistory,
+      error: error.message || "Erro desconhecido"
     });
   }
 });
@@ -187,16 +327,14 @@ app.post('/chat', async (req, res) => {
 
 // Inicialização da API Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const modelName = 'gemini-2.0-flash';
+// Troque para um modelo suportado pela sua conta/projeto:
+const modelName = 'gemini-1.5-flash';
 
 // Função para obter a hora atual - Garantindo o fuso horário brasileiro
 function getCurrentTime() {
   console.log("⏰ Executando getCurrentTime");
   const now = new Date();
   const brasiliaTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-
-  // console.log("Data original (servidor):", now);
-  // console.log("Data ajustada para Brasília:", brasiliaTime);
 
   const hours = brasiliaTime.getHours();
   const minutes = brasiliaTime.getMinutes();
@@ -211,8 +349,12 @@ function getCurrentTime() {
   const dayOfWeek = diasSemana[brasiliaTime.getDay()];
   const monthName = nomesMeses[month];
 
-  const formattedDateTime = `${dayOfWeek}, ${day} de ${monthName} de ${year}, ${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  // console.log("Horário formatado:", formattedDateTime);
+  // Formata a hora com zeros à esquerda quando necessário
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  const formattedSeconds = seconds.toString().padStart(2, '0');
+
+  const formattedDateTime = `${dayOfWeek}, ${day} de ${monthName} de ${year}, ${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
 
   return {
     currentTime: formattedDateTime,
@@ -235,23 +377,28 @@ async function getWeather(args) {
 
   if (!apiKey) {
     console.error("Chave da API OpenWeatherMap não configurada.");
-    return { error: "Chave da API OpenWeatherMap não configurada no servidor." };
+    return { error: "Desculpe, não consigo verificar o clima no momento. Tente novamente mais tarde." };
   }
   if (!location) {
     console.warn("Localização não fornecida para getWeather. Retornando erro amigável.");
-    return { error: "Por favor, especifique uma cidade para a previsão do tempo." };
+    return { error: "Por favor, me diga qual cidade você quer saber o clima." };
   }
 
   const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric&lang=pt_br`;
 
   try {
     const response = await axios.get(url);
+    const data = response.data;
+    
+    // Formata a resposta de forma mais amigável
     return {
-      location: response.data.name,
-      temperature: response.data.main.temp,
-      description: response.data.weather[0].description,
-      humidity: response.data.main.humidity,
-      windSpeed: response.data.wind.speed
+      location: data.name,
+      temperature: Math.round(data.main.temp),
+      description: data.weather[0].description,
+      humidity: data.main.humidity,
+      windSpeed: Math.round(data.wind.speed * 3.6), // Converte m/s para km/h
+      feelsLike: Math.round(data.main.feels_like),
+      icon: data.weather[0].icon
     };
   } catch (error) {
     console.error("Erro ao chamar OpenWeatherMap:", error.response?.data?.message || error.message);
@@ -349,7 +496,7 @@ const functionDeclarations = [
   }
 ];
 
-const systemInstruction = `Você é o Chatbot Musical, um assistente virtual especializado em música. 
+const systemInstruction = `Você é o Chatbot Musical, um assistente virtual especializado em música.
 Você deve responder principalmente sobre temas relacionados à música.
 Você tem acesso às seguintes funções:
 - getCurrentTime: Para informar a hora e data atuais no Brasil (horário de Brasília).
@@ -357,13 +504,16 @@ Você tem acesso às seguintes funções:
 - searchSong: Para buscar informações sobre músicas específicas.
 
 REGRAS IMPORTANTES:
-1. Quando o usuário perguntar sobre a hora atual, data atual, ou fazer perguntas como "que horas são?", "que dia é hoje?", SEMPRE use a função getCurrentTime. Forneça uma resposta completa que inclua o dia da semana, data e horário.
-2. Após informar a hora/data, você pode fazer uma conexão com alguma curiosidade musical relacionada.
-3. Seja amigável e entusiasmado sobre música! Use emojis musicais (🎵, 🎸, 🎹) quando apropriado.
-4. Se não souber uma resposta, seja honesto.
-5. Use as funções quando relevante para enriquecer a conversa. É OBRIGATÓRIO usar getCurrentTime para perguntas sobre data/hora.
-6. Se o usuário pedir ajuda, sugira temas musicais ou funcionalidades que você oferece.
-A data e hora atual (no momento em que o servidor iniciou) é: ${getCurrentTime().currentTime}. Use a função getCurrentTime para obter o valor mais recente quando o usuário perguntar.`;
+1. Quando o usuário perguntar sobre a hora atual, data atual, ou fazer perguntas como "que horas são?", "que dia é hoje?", VOCÊ DEVE SEMPRE usar a função getCurrentTime. NUNCA responda que não tem acesso a essas informações.
+2. NUNCA responda perguntas sobre data ou hora usando seu próprio conhecimento ou informações antigas. Sempre utilize o resultado da função getCurrentTime.
+3. Se você responder sobre data/hora sem usar a função, estará ERRADO. Exemplo de resposta ERRADA: "Não tenho acesso a informações em tempo real". Exemplo de resposta CERTA: (resultado da função getCurrentTime).
+4. Após informar a hora/data, você pode fazer uma conexão com alguma curiosidade musical relacionada.
+5. Seja amigável e entusiasmado sobre música! Use emojis musicais (🎵, 🎸, 🎹) quando apropriado.
+6. Se não souber uma resposta, seja honesto.
+7. Use as funções quando relevante para enriquecer a conversa. É OBRIGATÓRIO usar getCurrentTime para perguntas sobre data/hora.
+8. Se o usuário pedir ajuda, sugira temas musicais ou funcionalidades que você oferece.
+9. NUNCA mencione o nome das funções em suas respostas. Apenas use-as e forneça as informações solicitadas de forma natural.
+10. Para perguntas sobre clima, use a função getWeather e responda de forma natural, sem mencionar a função.`;
 
 
 app.get('/check-time', async (req, res) => {
@@ -388,18 +538,18 @@ app.post('/chat', async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: modelName,
-      tools: [{ functionDeclarations }],
-      systemInstruction: { parts: [{ text: systemInstruction }] },
+      tools: [{
+        functionDeclarations: functionDeclarations
+      }],
+      generation_config: { temperature: 0.7 },
     });
 
-    const chat = model.startChat({
-      history: history,
-      generationConfig: {
-        temperature: 0.7,
-      },
-    });
-
-    let currentApiRequestContents = [{role: "user", parts: [{text: message}]}]; // Conteúdo para enviar ao sendMessage
+    const chat = model.startChat();
+    
+    // Primeira chamada com a mensagem do usuário
+    currentApiRequestContents = message; // Envia apenas a string da mensagem
+    
+    let currentApiRequestContents = message; // <-- CORRETO: apenas a string
     let modelResponse; // Para armazenar a resposta do modelo (`GenerateContentResponse`)
     let loopCount = 0;
     const MAX_FUNCTION_CALL_LOOPS = 5;
@@ -411,7 +561,7 @@ app.post('/chat', async (req, res) => {
       // `sendMessage` espera um `string` ou `Part[]` ou `GenerateContentRequest`
       // Se `currentApiRequestContents` for um array de `FunctionResponsePart`, está correto.
       // Se for a primeira mensagem do usuário, `message` (string) é usado.
-      const messageToSend = (loopCount === 1) ? message : currentApiRequestContents;
+      const messageToSend = (loopCount === 1) ? currentApiRequestContents : currentApiRequestContents;
       const result = await chat.sendMessage(messageToSend); // `result` é `EnhancedGenerateContentResponse`
       
       modelResponse = result.response; // `modelResponse` é `GenerateContentResponse`

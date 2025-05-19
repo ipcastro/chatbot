@@ -120,7 +120,7 @@ async function sendMessage() {
         }
         
         // Envia a mensagem para o servidor com o histórico da API
-        const response = await fetch('/chat', {
+        const response = await fetch('https://chatbot-dny3.onrender.com/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -161,7 +161,7 @@ async function sendMessage() {
 // Função para testar diretamente a função de hora
 async function testTimeFunction() {
     try {
-        const response = await fetch('/check-time');
+        const response = await fetch('https://chatbot-dny3.onrender.com/check-time');
         const data = await response.json();
         console.log("Teste de hora:", data);
         

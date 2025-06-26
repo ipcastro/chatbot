@@ -5,6 +5,7 @@ const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
 // Configuração do servidor Express
 const app = express();
@@ -15,7 +16,40 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ... (código anterior do server.js) ...
+// URL de conexão e nome do banco
+const uri = process.env.MONGO_URI; // Altere se necessário
+const dbName = 'IIW2023A_Logs';      // Altere para o nome do seu banco
+
+let db;
+
+// Conexão com o MongoDB
+MongoClient.connect(uri, { useUnifiedTopology: true })
+    .then(client => {
+        db = client.db(dbName);
+        console.log('Conectado ao MongoDB');
+        const collection = db.collection("tb_cl_user_log_acess");  
+
+        // Inicie o servidor só depois de conectar ao banco
+        app.listen(PORT, () => {
+            console.log(`Servidor rodando na porta ${PORT}`);
+            console.log(`Acessível em: http://localhost:${PORT}`);
+            if (!process.env.GEMINI_API_KEY) {
+                console.warn("ALERTA: GEMINI_API_KEY não está definida no arquivo .env! O chatbot não funcionará.");
+            }
+            if (!process.env.OPENWEATHER_API_KEY) {
+                console.warn("ALERTA: OPENWEATHER_API_KEY não está definida no arquivo .env! A função getWeather não funcionará.");
+            }
+            if (!process.env.LASTFM_API_KEY) {
+                console.warn("ALERTA: LASTFM_API_KEY não está definida no arquivo .env! A função searchSong não funcionará.");
+            }
+        });
+    })
+    .catch(err => {
+        console.error('Erro ao conectar ao MongoDB:', err);
+    });
+
+
+let dadosRankingVitrine = [];
 
 app.post('/chat', async (req, res) => {
   try {
@@ -323,7 +357,72 @@ app.post('/chat', async (req, res) => {
   }
 });
 
+app.post('/api/log-connection', async (req, res) => {
+    const { ip, acao } = req.body;
+    const nomeBot = "IFCODE SuperBot"; // Troque para o nome do seu bot!
 
+    if (!ip || !acao) {
+        return res.status(400).json({ error: "Dados de log incompletos (IP e ação são obrigatórios)." });
+    }
+
+    const agora = new Date();
+    const dataFormatada = agora.toISOString().split('T')[0]; // YYYY-MM-DD
+    const horaFormatada = agora.toTimeString().split(' ')[0]; // HH:MM:SS
+
+    const logEntry = {
+        col_data: dataFormatada,
+        col_hora: horaFormatada,
+        col_IP: ip,
+        col_nome_bot: nomeBot,
+        col_acao: acao
+    };
+
+    try {
+        const collection = db.collection("tb_cl_user_log_acess");
+        await collection.insertOne(logEntry);
+        res.status(201).json({ message: "Log registrado com sucesso." });
+    } catch (error) {
+        res.status(500).json({ error: "Erro ao registrar log." });
+    }
+});
+
+app.post('/api/ranking/registrar-acesso-bot', (req, res) => {
+    const { botId, nomeBot, timestampAcesso, usuarioId } = req.body;
+
+    if (!botId || !nomeBot) {
+        return res.status(400).json({ error: "ID e Nome do Bot são obrigatórios para o ranking." });
+    }
+
+    const acesso = {
+        botId,
+        nomeBot,
+        usuarioId: usuarioId || 'anonimo',
+        acessoEm: timestampAcesso ? new Date(timestampAcesso) : new Date(),
+        contagem: 1
+    };
+
+    const botExistente = dadosRankingVitrine.find(b => b.botId === botId);
+    if (botExistente) {
+        botExistente.contagem += 1;
+        botExistente.ultimoAcesso = acesso.acessoEm;
+    } else {
+        dadosRankingVitrine.push({
+            botId: botId,
+            nomeBot: nomeBot,
+            contagem: 1,
+            ultimoAcesso: acesso.acessoEm
+        });
+    }
+
+    console.log('[Servidor] Dados de ranking atualizados:', dadosRankingVitrine);
+    res.status(201).json({ message: `Acesso ao bot ${nomeBot} registrado para ranking.` });
+});
+
+app.get('/api/ranking/visualizar', (req, res) => {
+    // Ordena do maior para o menor
+    const rankingOrdenado = [...dadosRankingVitrine].sort((a, b) => b.contagem - a.contagem);
+    res.json(rankingOrdenado);
+});
 
 // Inicialização da API Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -683,16 +782,18 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Acessível em: http://localhost:${PORT}`);
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn("ALERTA: GEMINI_API_KEY não está definida no arquivo .env! O chatbot não funcionará.");
-  }
-  if (!process.env.OPENWEATHER_API_KEY) {
-    console.warn("ALERTA: OPENWEATHER_API_KEY não está definida no arquivo .env! A função getWeather não funcionará.");
-  }
-  if (!process.env.LASTFM_API_KEY) {
-    console.warn("ALERTA: LASTFM_API_KEY não está definida no arquivo .env! A função searchSong não funcionará.");
-  }
-});
+async function registrarAcessoBotParaRanking(botId, nomeBot) {
+    const dataRanking = {
+        botId: botId,
+        nomeBot: nomeBot,
+        timestampAcesso: new Date().toISOString()
+    };
+    await fetch('/api/ranking/registrar-acesso-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataRanking)
+    });
+}
+
+
+

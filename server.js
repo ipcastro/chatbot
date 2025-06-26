@@ -16,38 +16,39 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// URL de conexão e nome do banco
-const uri = process.env.MONGO_URI; // Altere se necessário
-const dbName = 'IIW2023A_Logs';      // Altere para o nome do seu banco
+// URLs de conexão e nomes dos bancos
+const mongoUriLogs = process.env.MONGO_URI_LOGS;
+const mongoUriHistoria = process.env.MONGO_URI_HISTORIA;
 
-let db;
+let dbLogs;
+let dbHistoria;
 
-// Conexão com o MongoDB
-MongoClient.connect(uri, { useUnifiedTopology: true })
-    .then(client => {
-        db = client.db(dbName);
-        console.log('Conectado ao MongoDB');
-        const collection = db.collection("tb_cl_user_log_acess");  
+async function connectToMongoDB(uri, dbName) {
+    if (!uri) {
+        console.error(`URI do MongoDB para ${dbName} não definida!`);
+        return null;
+    }
+    const client = new MongoClient(uri, { useUnifiedTopology: true });
+    try {
+        await client.connect();
+        console.log(`Conectado ao MongoDB Atlas: ${dbName}`);
+        return client.db(dbName);
+    } catch (err) {
+        console.error(`Falha ao conectar ao MongoDB ${dbName}:`, err);
+        return null;
+    }
+}
 
-        // Inicie o servidor só depois de conectar ao banco
-        app.listen(PORT, () => {
-            console.log(`Servidor rodando na porta ${PORT}`);
-            console.log(`Acessível em: http://localhost:${PORT}`);
-            if (!process.env.GEMINI_API_KEY) {
-                console.warn("ALERTA: GEMINI_API_KEY não está definida no arquivo .env! O chatbot não funcionará.");
-            }
-            if (!process.env.OPENWEATHER_API_KEY) {
-                console.warn("ALERTA: OPENWEATHER_API_KEY não está definida no arquivo .env! A função getWeather não funcionará.");
-            }
-            if (!process.env.LASTFM_API_KEY) {
-                console.warn("ALERTA: LASTFM_API_KEY não está definida no arquivo .env! A função searchSong não funcionará.");
-            }
-        });
-    })
-    .catch(err => {
-        console.error('Erro ao conectar ao MongoDB:', err);
-    });
+async function initializeDatabases() {
+    dbLogs = await connectToMongoDB(mongoUriLogs, "IIW2023B_Logs");
+    dbHistoria = await connectToMongoDB(mongoUriHistoria, "chatbotHistoriaDB");
+    if (!dbLogs || !dbHistoria) {
+        console.error("Falha ao conectar a um ou mais bancos de dados. Verifique as URIs e configurações.");
+    }
+}
 
+// Inicializa os bancos antes de aceitar requisições
+initializeDatabases();
 
 let dadosRankingVitrine = [];
 
@@ -378,7 +379,7 @@ app.post('/api/log-connection', async (req, res) => {
     };
 
     try {
-        const collection = db.collection("tb_cl_user_log_acess");
+        const collection = dbLogs.collection("tb_cl_user_log_acess");
         await collection.insertOne(logEntry);
         res.status(201).json({ message: "Log registrado com sucesso." });
     } catch (error) {
@@ -793,6 +794,68 @@ async function registrarAcessoBotParaRanking(botId, nomeBot) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataRanking)
     });
+}
+
+app.post('/api/chat/salvar-historico', async (req, res) => {
+    if (!dbHistoria) {
+        return res.status(500).json({ error: "Servidor não conectado ao banco de dados de histórico." });
+    }
+
+    try {
+        const { sessionId, userId, botId, startTime, endTime, messages } = req.body;
+
+        if (!sessionId || !botId || !messages || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ error: "Dados incompletos para salvar histórico (sessionId, botId, messages são obrigatórios)." });
+        }
+
+        const novaSessao = {
+            sessionId,
+            userId: userId || 'anonimo',
+            botId,
+            startTime: startTime ? new Date(startTime) : new Date(),
+            endTime: endTime ? new Date(endTime) : new Date(),
+            messages,
+            loggedAt: new Date()
+        };
+
+        const collection = dbHistoria.collection("sessoesChat");
+        const result = await collection.insertOne(novaSessao);
+
+        console.log('[Servidor] Histórico de sessão salvo:', result.insertedId);
+        res.status(201).json({ message: "Histórico de chat salvo com sucesso!", sessionId: novaSessao.sessionId });
+
+    } catch (error) {
+        console.error("[Servidor] Erro em /api/chat/salvar-historico:", error.message);
+        res.status(500).json({ error: "Erro interno ao salvar histórico de chat." });
+    }
+});
+
+async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messages) {
+    try {
+        const payload = {
+            sessionId,
+            botId,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            messages // O array chatHistory completo
+        };
+
+        const response = await fetch(`${backendUrl}/api/chat/salvar-historico`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Falha ao salvar histórico:", errorData.error || response.statusText);
+        } else {
+            const result = await response.json();
+            console.log("Histórico de sessão enviado:", result.message);
+        }
+    } catch (error) {
+        console.error("Erro ao enviar histórico de sessão:", error);
+    }
 }
 
 

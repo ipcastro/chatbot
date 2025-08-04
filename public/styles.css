@@ -492,3 +492,209 @@ button:active {
 .message {
     padding-bottom: 20px;  /* Aumentando o padding para acomodar o timestamp */
 }
+
+/* Estilos para a seção de histórico de conversas */
+.historico-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.historico-header {
+    background: linear-gradient(90deg, #ba68c8, #ce93d8);
+    color: white;
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    position: relative;
+    width: 90%;
+    max-width: 800px;
+}
+
+.historico-header h2 {
+    margin: 0;
+    font-size: 24px;
+    text-align: center;
+}
+
+.fechar-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s ease;
+}
+
+.fechar-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.historico-content {
+    background: white;
+    border-radius: 15px;
+    max-width: 90%;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    width: 90%;
+    max-width: 800px;
+}
+
+.lista-sessoes-container {
+    padding: 20px;
+    border-bottom: 1px solid rgba(186, 104, 200, 0.2);
+    max-height: 300px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.lista-sessoes-container h3 {
+    color: #4a148c;
+    margin-bottom: 15px;
+    font-size: 18px;
+    text-align: center;
+}
+
+#lista-sessoes {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#lista-sessoes li {
+    background: rgba(186, 104, 200, 0.1);
+    margin: 8px 0;
+    padding: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-left: 4px solid #ba68c8;
+}
+
+#lista-sessoes li:hover {
+    background: rgba(186, 104, 200, 0.2);
+    transform: translateX(5px);
+}
+
+#lista-sessoes li.sessao-selecionada {
+    background: linear-gradient(45deg, #ba68c8, #ce93d8);
+    color: white;
+}
+
+.conversa-detalhada {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.conversa-detalhada h3 {
+    color: #4a148c;
+    margin-bottom: 15px;
+    font-size: 18px;
+    text-align: center;
+}
+
+.conversa-detalhada .message {
+    margin: 10px 0;
+    max-width: 100%;
+}
+
+.conversa-detalhada .user-message {
+    background: linear-gradient(45deg, #ba68c8, #ce93d8);
+    color: white;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.conversa-detalhada .bot-message {
+    background: rgba(186, 104, 200, 0.1);
+    color: #4a148c;
+    margin-right: auto;
+    margin-left: 0;
+}
+
+.conversa-detalhada .message-timestamp {
+    font-size: 10px;
+    opacity: 0.6;
+    margin-top: 5px;
+}
+
+/* Responsividade para o histórico */
+@media (max-width: 768px) {
+    .historico-container {
+        padding: 10px;
+    }
+    
+    .historico-header,
+    .historico-content {
+        width: 95%;
+    }
+    
+    .historico-content {
+        max-height: 80vh;
+    }
+    
+    .historico-header h2 {
+        font-size: 20px;
+    }
+    
+    .lista-sessoes-container {
+        max-height: 200px;
+    }
+    
+    .conversa-detalhada {
+        max-height: 300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .historico-container {
+        padding: 5px;
+    }
+    
+    .historico-header,
+    .historico-content {
+        width: 100%;
+    }
+    
+    .historico-content {
+        max-height: 85vh;
+    }
+    
+    .historico-header {
+        padding: 15px;
+    }
+    
+    .historico-header h2 {
+        font-size: 18px;
+    }
+    
+    .lista-sessoes-container,
+    .conversa-detalhada {
+        padding: 15px;
+    }
+    
+    #lista-sessoes li {
+        padding: 12px;
+        font-size: 14px;
+    }
+}

@@ -27,6 +27,25 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
         </div>
     </div>
     
+    <!-- Seção de Histórico de Conversas -->
+    <div id="historico-container" class="historico-container" style="display: none;">
+        <div class="historico-header">
+            <h2>📚 Histórico de Conversas</h2>
+            <button id="fechar-historico" class="fechar-btn">✕</button>
+        </div>
+        <div class="historico-content">
+            <div class="lista-sessoes-container">
+                <h3>Conversas Salvas</h3>
+                <ul id="lista-sessoes">
+                    <!-- A lista de sessões será populada aqui via JavaScript -->
+                </ul>
+            </div>
+            <div id="visualizacao-conversa-detalhada" class="conversa-detalhada">
+                <!-- O conteúdo de uma conversa selecionada aparecerá aqui -->
+            </div>
+        </div>
+    </div>
+    
     <!-- Script do cliente (importante carregar após o DOM estar pronto) -->
     <script src="script.js"></script>
 </body>

@@ -1,11 +1,11 @@
 // Importações necessárias
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const path = require('path');
 const { MongoClient } = require('mongodb');
+require('dotenv').config();
 
 // Configuração do servidor Express
 const app = express();
@@ -17,8 +17,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // URLs de conexão e nomes dos bancos
-const mongoUriLogs = process.env.MONGO_URI_LOGS;
-const mongoUriHistoria = process.env.MONGO_URI_HISTORIA;
+const mongoUriLogs = process.env.MONGO_URI;
+const mongoUriHistoria = process.env.MONGO_HISTORIA;
 
 let dbLogs;
 let dbHistoria;
@@ -28,7 +28,7 @@ async function connectToMongoDB(uri, dbName) {
         console.error(`URI do MongoDB para ${dbName} não definida!`);
         return null;
     }
-    const client = new MongoClient(uri, { useUnifiedTopology: true });
+    const client = new MongoClient(uri);
     try {
         await client.connect();
         console.log(`Conectado ao MongoDB Atlas: ${dbName}`);
@@ -39,7 +39,7 @@ async function connectToMongoDB(uri, dbName) {
     }
 }
 
-async function initializeDatabases() {
+async function initializeDatabases(mongoUriLogs, mongoUriHistoria) {
     dbLogs = await connectToMongoDB(mongoUriLogs, "IIW2023B_Logs");
     dbHistoria = await connectToMongoDB(mongoUriHistoria, "chatbotHistoriaDB");
     if (!dbLogs || !dbHistoria) {
@@ -48,7 +48,7 @@ async function initializeDatabases() {
 }
 
 // Inicializa os bancos antes de aceitar requisições
-initializeDatabases();
+initializeDatabases(mongoUriLogs, mongoUriHistoria);
 
 let dadosRankingVitrine = [];
 
@@ -858,5 +858,28 @@ async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messa
     }
 }
 
+app.get('/api/chat/historicos', async (req, res) => {
+    if (!dbHistoria) {
+        return res.status(500).json({ error: "Servidor não conectado ao banco de dados de histórico." });
+    }
+    
+    try {
+        const collection = dbHistoria.collection("sessoesChat");
+        const historicos = await collection.find({})
+                                            .sort({ startTime: -1 })
+                                            .limit(10)
+                                            .toArray(); // Converte o cursor para um array
+        
+        console.log(`[Servidor] Buscados ${historicos.length} históricos de chat`);
+        res.json(historicos);
+        
+    } catch (error) {
+        console.error("[Servidor] Erro ao buscar históricos:", error);
+        res.status(500).json({ error: "Erro interno ao buscar históricos de chat." });
+    }
+});
 
-
+// Iniciar o servidor
+app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+});

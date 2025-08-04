@@ -3,12 +3,20 @@ const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('user-input');
 const sendButton = document.getElementById('send-button');
 const historyButton = document.getElementById('history-button');
+const historicoContainer = document.getElementById('historico-container');
+const listaSessoes = document.getElementById('lista-sessoes');
+const visualizacaoConversa = document.getElementById('visualizacao-conversa-detalhada');
+const fecharHistoricoBtn = document.getElementById('fechar-historico');
 
 // Array para armazenar o histórico de conversas para exibição
 const conversationHistory = [];
 
 // Array para armazenar o histórico no formato da API Gemini
 let apiChatHistory = [];
+
+// Variáveis para gerenciar a sessão atual
+let currentSessionId = `sessao_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+let chatStartTime = new Date();
 
 // Função para rolar automaticamente para a última mensagem
 function scrollToBottom() {
@@ -96,6 +104,204 @@ function isTimeRelatedQuestion(message) {
     return timeQuestions.some(q => message.toLowerCase().includes(q.toLowerCase()));
 }
 
+// Função para salvar histórico da sessão
+async function salvarHistoricoSessao() {
+    try {
+        // Usar URL local para desenvolvimento
+        const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? 'http://localhost:3001' 
+            : 'https://chatbot-dny3.onrender.com';
+            
+        const payload = {
+            sessionId: currentSessionId,
+            botId: "IFCODE SuperBot",
+            startTime: chatStartTime.toISOString(),
+            endTime: new Date().toISOString(),
+            messages: apiChatHistory // O array completo do histórico da API
+        };
+
+        const response = await fetch(`${backendUrl}/api/chat/salvar-historico`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Falha ao salvar histórico:", errorData.error || response.statusText);
+        } else {
+            const result = await response.json();
+            console.log("Histórico de sessão salvo:", result.message);
+        }
+    } catch (error) {
+        console.error("Erro ao enviar histórico de sessão:", error);
+    }
+}
+
+// Função para carregar histórico de sessões do backend
+async function carregarHistoricoSessoes() {
+    try {
+        // Usar URL local para desenvolvimento
+        const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? 'http://localhost:3001' 
+            : 'https://chatbot-dny3.onrender.com';
+            
+        const response = await fetch(`${backendUrl}/api/chat/historicos`);
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        const historicos = await response.json();
+        console.log('Históricos carregados:', historicos);
+        
+        // Limpar lista atual
+        listaSessoes.innerHTML = '';
+        
+        if (historicos.length === 0) {
+            const noHistoryItem = document.createElement('li');
+            noHistoryItem.textContent = 'Nenhuma conversa salva ainda.';
+            noHistoryItem.style.textAlign = 'center';
+            noHistoryItem.style.opacity = '0.7';
+            noHistoryItem.style.cursor = 'default';
+            listaSessoes.appendChild(noHistoryItem);
+            return;
+        }
+        
+        // Criar itens da lista para cada sessão
+        historicos.forEach(sessao => {
+            const listItem = document.createElement('li');
+            const startTime = new Date(sessao.startTime);
+            const endTime = new Date(sessao.endTime);
+            
+            // Formatar data e hora
+            const dataFormatada = startTime.toLocaleDateString('pt-BR');
+            const horaFormatada = startTime.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            // Contar mensagens
+            const numMensagens = sessao.messages ? sessao.messages.length : 0;
+            
+            listItem.innerHTML = `
+                <strong>Conversa em ${dataFormatada} às ${horaFormatada}</strong><br>
+                <small>${numMensagens} mensagens • ${sessao.botId || 'Chatbot'}</small>
+            `;
+            
+            // Adicionar event listener para exibir conversa detalhada
+            listItem.addEventListener('click', () => {
+                // Remover seleção anterior
+                document.querySelectorAll('#lista-sessoes li').forEach(li => {
+                    li.classList.remove('sessao-selecionada');
+                });
+                
+                // Selecionar item atual
+                listItem.classList.add('sessao-selecionada');
+                
+                // Exibir conversa detalhada
+                exibirConversaDetalhada(sessao);
+            });
+            
+            listaSessoes.appendChild(listItem);
+        });
+        
+    } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+        showError('Erro ao carregar histórico de conversas.');
+    }
+}
+
+// Função para exibir conversa detalhada
+function exibirConversaDetalhada(sessao) {
+    // Limpar área de visualização
+    visualizacaoConversa.innerHTML = '';
+    
+    // Criar cabeçalho da conversa
+    const header = document.createElement('h3');
+    const startTime = new Date(sessao.startTime);
+    const endTime = new Date(sessao.endTime);
+    
+    header.textContent = `Conversa de ${startTime.toLocaleDateString('pt-BR')} às ${startTime.toLocaleTimeString('pt-BR')}`;
+    visualizacaoConversa.appendChild(header);
+    
+    // Verificar se há mensagens
+    if (!sessao.messages || sessao.messages.length === 0) {
+        const noMessages = document.createElement('p');
+        noMessages.textContent = 'Nenhuma mensagem encontrada nesta conversa.';
+        noMessages.style.opacity = '0.7';
+        noMessages.style.textAlign = 'center';
+        visualizacaoConversa.appendChild(noMessages);
+        return;
+    }
+    
+    // Exibir cada mensagem, filtrando a instrução do sistema
+    sessao.messages.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        
+        // Determinar se é mensagem do usuário ou do bot
+        const isUserMessage = msg.role === 'user';
+        messageDiv.className = `message ${isUserMessage ? 'user-message' : 'bot-message'}`;
+        
+        // Extrair texto da mensagem
+        let messageText = '';
+        if (msg.parts && Array.isArray(msg.parts)) {
+            messageText = msg.parts
+                .filter(part => part.text)
+                .map(part => part.text)
+                .join(' ');
+        } else if (typeof msg === 'string') {
+            messageText = msg;
+        } else if (msg.text) {
+            messageText = msg.text;
+        }
+        
+        // Filtrar a instrução do sistema (system instruction)
+        const systemInstructionKeywords = [
+            'Você é o Chatbot Musical',
+            'assistente virtual especializado em música',
+            'REGRAS IMPORTANTES',
+            'getCurrentTime',
+            'getWeather',
+            'searchSong',
+            'NUNCA responda perguntas sobre data',
+            'Use emojis musicais',
+            'NUNCA mencione o nome das funções'
+        ];
+        
+        const isSystemInstruction = systemInstructionKeywords.some(keyword => 
+            messageText.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        // Pular mensagens que são instruções do sistema
+        if (isSystemInstruction) {
+            return; // Pula esta mensagem
+        }
+        
+        // Formatar texto com quebras de linha
+        messageDiv.innerHTML = messageText.replace(/\n/g, '<br>');
+        
+        // Adicionar timestamp se disponível
+        if (msg.timestamp) {
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'message-timestamp';
+            timestampSpan.textContent = new Date(msg.timestamp).toLocaleTimeString('pt-BR');
+            messageDiv.appendChild(timestampSpan);
+        }
+        
+        visualizacaoConversa.appendChild(messageDiv);
+    });
+}
+
+// Função para mostrar/esconder o histórico
+function toggleHistorico() {
+    if (historicoContainer.style.display === 'none' || !historicoContainer.style.display) {
+        historicoContainer.style.display = 'flex';
+        carregarHistoricoSessoes(); // Carregar dados quando abrir
+    } else {
+        historicoContainer.style.display = 'none';
+    }
+}
+
 // Função para enviar mensagem ao servidor
 async function sendMessage() {
     const message = userInput.value.trim();
@@ -145,6 +351,10 @@ async function sendMessage() {
         
         // Adiciona a resposta do bot à interface
         addMessage(data.response);
+        
+        // Salva o histórico após cada interação
+        await salvarHistoricoSessao();
+        
     } catch (error) {
         console.error('Erro ao conversar com o bot:', error);
         removeTypingIndicator();
@@ -176,103 +386,9 @@ async function testTimeFunction() {
     }
 }
 
-// Função para mostrar histórico
-function showHistory() {
-    const chatMessages = document.querySelector('.chat-messages');
-    chatMessages.innerHTML = '';
-    
-    // Cria o cabeçalho do histórico
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'history-header';
-    
-    const historyTitle = document.createElement('div');
-    historyTitle.className = 'history-title';
-    historyTitle.textContent = '📜 Histórico de Conversas';
-    headerDiv.appendChild(historyTitle);
-    
-    const backButton = document.createElement('button');
-    backButton.className = 'back-button';
-    backButton.textContent = 'Voltar ao Chat';
-    backButton.onclick = () => {
-        chatMessages.innerHTML = '';
-        conversationHistory.forEach(msg => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${msg.isUser ? 'user-message' : 'bot-message'}`;
-            
-            if (typeof msg.message === 'string') {
-                messageDiv.innerHTML = msg.message.replace(/\n/g, '<br>');
-            } else {
-                messageDiv.textContent = msg.message;
-            }
-            
-            // Adicionar timestamp ao restaurar as mensagens
-            const timestampSpan = document.createElement('span');
-            timestampSpan.className = 'message-timestamp';
-            timestampSpan.textContent = msg.timestamp;
-            messageDiv.appendChild(timestampSpan);
-            
-            chatMessages.appendChild(messageDiv);
-        });
-    };
-    headerDiv.appendChild(backButton);
-    
-    chatMessages.appendChild(headerDiv);
-    
-    // Agrupa as mensagens por assunto
-    let currentSubject = '';
-    let currentMessages = [];
-    
-    conversationHistory.forEach((msg, index) => {
-        if (msg.isUser) {
-            if (currentSubject) {
-                addMessageGroup(currentSubject, currentMessages);
-            }
-            currentSubject = msg.message;
-            currentMessages = [msg];
-        } else {
-            currentMessages.push(msg);
-        }
-        
-        if (index === conversationHistory.length - 1 && currentSubject) {
-            addMessageGroup(currentSubject, currentMessages);
-        }
-    });
-    
-    scrollToBottom();
-}
 
-// Função para adicionar grupo de mensagens no histórico
-function addMessageGroup(subject, messages) {
-    const chatMessages = document.querySelector('.chat-messages');
-    
-    const subjectDiv = document.createElement('div');
-    subjectDiv.className = 'history-subject';
-    subjectDiv.textContent = `💬 ${subject}`;
-    chatMessages.appendChild(subjectDiv);
-    
-    messages.forEach(msg => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `history-message ${msg.isUser ? 'user-message' : 'bot-message'}`;
-        
-        if (typeof msg.message === 'string') {
-            messageDiv.innerHTML = msg.message.replace(/\n/g, '<br>');
-        } else {
-            messageDiv.textContent = msg.message;
-        }
-        
-        // Adiciona timestamp às mensagens no histórico
-        const timestampSpan = document.createElement('span');
-        timestampSpan.className = 'message-timestamp';
-        timestampSpan.textContent = msg.timestamp;
-        messageDiv.appendChild(timestampSpan);
-        
-        chatMessages.appendChild(messageDiv);
-    });
-    
-    const separator = document.createElement('div');
-    separator.className = 'history-separator';
-    chatMessages.appendChild(separator);
-}
+
+
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
@@ -283,20 +399,19 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMessage();
         }
     });
-    historyButton.addEventListener('click', showHistory);
     
-    // Adicionar botão de teste de hora (apenas em desenvolvimento)
-    const testButton = document.createElement('button');
-    testButton.textContent = 'Testar Hora';
-    testButton.className = 'test-button';
-    testButton.style.position = 'fixed';
-    testButton.style.bottom = '10px';
-    testButton.style.right = '10px';
-    testButton.style.zIndex = '1000';
-    testButton.style.padding = '8px 15px';
-    testButton.style.background = '#a1887f';
-    testButton.addEventListener('click', testTimeFunction);
-    document.body.appendChild(testButton);
+    // Event listeners para o histórico
+    historyButton.addEventListener('click', toggleHistorico);
+    fecharHistoricoBtn.addEventListener('click', () => {
+        historicoContainer.style.display = 'none';
+    });
+    
+    // Fechar histórico ao clicar fora dele
+    historicoContainer.addEventListener('click', (e) => {
+        if (e.target === historicoContainer) {
+            historicoContainer.style.display = 'none';
+        }
+    });
     
     // Inicializar o histórico de conversa com a mensagem de boas-vindas
     if (conversationHistory.length === 0) {

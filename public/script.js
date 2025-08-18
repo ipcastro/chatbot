@@ -3,16 +3,26 @@ const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('user-input');
 const sendButton = document.getElementById('send-button');
 const historyButton = document.getElementById('history-button');
-const historicoContainer = document.getElementById('historico-container');
-const listaSessoes = document.getElementById('lista-sessoes');
-const visualizacaoConversa = document.getElementById('visualizacao-conversa-detalhada');
-const fecharHistoricoBtn = document.getElementById('fechar-historico');
+const historyModal = document.getElementById('history-modal-overlay');
+const historyClose = document.getElementById('history-close');
+const sessionsList = document.getElementById('sessions-list');
+const sessionDetails = document.getElementById('session-details');
+const backToSessions = document.getElementById('back-to-sessions');
 
 // Array para armazenar o histórico de conversas para exibição
 const conversationHistory = [];
 
-// Array para armazenar o histórico no formato da API Gemini
+// Array para armazenar o histórico no formato da API
 let apiChatHistory = [];
+
+// Função para formatar mensagem para o histórico da API
+function formatMessageForHistory(message, isUser) {
+    return {
+        role: isUser ? 'user' : 'assistant',
+        text: message,
+        timestamp: new Date().toISOString()
+    }
+}
 
 // Variáveis para gerenciar a sessão atual
 let currentSessionId = `sessao_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -72,6 +82,9 @@ function addMessage(message, isUser = false) {
         timestamp: timestamp
     });
     
+    // Adiciona ao histórico da API
+    apiChatHistory.push(formatMessageForHistory(message, isUser));
+    
     scrollToBottom();
 }
 
@@ -107,10 +120,7 @@ function isTimeRelatedQuestion(message) {
 // Função para salvar histórico da sessão
 async function salvarHistoricoSessao() {
     try {
-        // Usar URL local para desenvolvimento
-        const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:3001' 
-            : 'https://chatbot-dny3.onrender.com';
+        const backendUrl = 'http://localhost:3001'; // URL fixa para desenvolvimento local
             
         const payload = {
             sessionId: currentSessionId,
@@ -139,12 +149,9 @@ async function salvarHistoricoSessao() {
 }
 
 // Função para carregar histórico de sessões do backend
-async function carregarHistoricoSessoes() {
+async function updateSessionsList() {
     try {
-        // Usar URL local para desenvolvimento
-        const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:3001' 
-            : 'https://chatbot-dny3.onrender.com';
+        const backendUrl = 'http://localhost:3001'; // URL fixa para desenvolvimento local
             
         const response = await fetch(`${backendUrl}/api/chat/historicos`);
         if (!response.ok) {
@@ -155,23 +162,24 @@ async function carregarHistoricoSessoes() {
         console.log('Históricos carregados:', historicos);
         
         // Limpar lista atual
-        listaSessoes.innerHTML = '';
+        sessionsList.innerHTML = '';
         
         if (historicos.length === 0) {
-            const noHistoryItem = document.createElement('li');
-            noHistoryItem.textContent = 'Nenhuma conversa salva ainda.';
-            noHistoryItem.style.textAlign = 'center';
-            noHistoryItem.style.opacity = '0.7';
-            noHistoryItem.style.cursor = 'default';
-            listaSessoes.appendChild(noHistoryItem);
+            sessionsList.innerHTML = `
+                <div class="no-history">
+                    <p>Nenhuma conversa salva ainda.</p>
+                </div>
+            `;
             return;
         }
         
         // Criar itens da lista para cada sessão
         historicos.forEach(sessao => {
-            const listItem = document.createElement('li');
+            const sessionCard = document.createElement('div');
+            sessionCard.className = 'session-card';
+            sessionCard.dataset.id = sessao._id;
+            
             const startTime = new Date(sessao.startTime);
-            const endTime = new Date(sessao.endTime);
             
             // Formatar data e hora
             const dataFormatada = startTime.toLocaleDateString('pt-BR');
@@ -183,26 +191,44 @@ async function carregarHistoricoSessoes() {
             // Contar mensagens
             const numMensagens = sessao.messages ? sessao.messages.length : 0;
             
-            listItem.innerHTML = `
-                <strong>Conversa em ${dataFormatada} às ${horaFormatada}</strong><br>
-                <small>${numMensagens} mensagens • ${sessao.botId || 'Chatbot'}</small>
+            const titulo = sessao.titulo || 'Conversa Sem Título';
+            
+            sessionCard.innerHTML = `
+                <div class="session-header">
+                    <h3>${titulo}</h3>
+                    <div class="session-actions">
+                        <button class="btn-rename" title="Renomear Conversa" data-id="${sessao._id}">✨</button>
+                        <button class="btn-delete" title="Excluir Conversa" data-id="${sessao._id}">🗑️</button>
+                    </div>
+                </div>
+                <div class="session-info">
+                    <span class="session-date">${dataFormatada} às ${horaFormatada}</span>
+                    <span class="session-stats">${numMensagens} mensagens • ${sessao.botId || 'Chatbot'}</span>
+                </div>
             `;
             
-            // Adicionar event listener para exibir conversa detalhada
-            listItem.addEventListener('click', () => {
-                // Remover seleção anterior
-                document.querySelectorAll('#lista-sessoes li').forEach(li => {
-                    li.classList.remove('sessao-selecionada');
-                });
-                
-                // Selecionar item atual
-                listItem.classList.add('sessao-selecionada');
-                
-                // Exibir conversa detalhada
-                exibirConversaDetalhada(sessao);
+            // Event listener para botões
+            const btnRename = sessionCard.querySelector('.btn-rename');
+            const btnDelete = sessionCard.querySelector('.btn-delete');
+            
+            btnRename.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await obterESalvarTitulo(sessao._id, sessionCard);
             });
             
-            listaSessoes.appendChild(listItem);
+            btnDelete.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await excluirSessao(sessao._id, sessionCard);
+            });
+
+            // Event listener para visualizar conversa
+            sessionCard.addEventListener('click', () => {
+                sessionsList.style.display = 'none';
+                sessionDetails.style.display = 'flex';
+                showSessionDetails(sessao);
+            });
+            
+            sessionsList.appendChild(sessionCard);
         });
         
     } catch (error) {
@@ -212,36 +238,49 @@ async function carregarHistoricoSessoes() {
 }
 
 // Função para exibir conversa detalhada
-function exibirConversaDetalhada(sessao) {
+function showSessionDetails(sessao) {
     // Limpar área de visualização
-    visualizacaoConversa.innerHTML = '';
+    sessionDetails.innerHTML = '';
     
-    // Criar cabeçalho da conversa
-    const header = document.createElement('h3');
+    // Criar cabeçalho com título e data
+    const header = document.createElement('div');
+    header.className = 'session-details-header';
     const startTime = new Date(sessao.startTime);
-    const endTime = new Date(sessao.endTime);
     
-    header.textContent = `Conversa de ${startTime.toLocaleDateString('pt-BR')} às ${startTime.toLocaleTimeString('pt-BR')}`;
-    visualizacaoConversa.appendChild(header);
+    header.innerHTML = `
+        <button id="back-to-sessions" class="btn-back">←</button>
+        <div class="session-title">
+            <h2>${sessao.titulo || 'Conversa Sem Título'}</h2>
+            <span class="session-date">${startTime.toLocaleDateString('pt-BR')} às ${startTime.toLocaleTimeString('pt-BR')}</span>
+        </div>
+    `;
+    
+    // Adicionar event listener para o botão voltar
+    const backButton = header.querySelector('#back-to-sessions');
+    backButton.addEventListener('click', () => {
+        sessionDetails.style.display = 'none';
+        sessionsList.style.display = 'flex';
+    });
+    
+    sessionDetails.appendChild(header);
+    
+    // Container para mensagens
+    const messagesContainer = document.createElement('div');
+    messagesContainer.className = 'session-messages';
     
     // Verificar se há mensagens
     if (!sessao.messages || sessao.messages.length === 0) {
-        const noMessages = document.createElement('p');
-        noMessages.textContent = 'Nenhuma mensagem encontrada nesta conversa.';
-        noMessages.style.opacity = '0.7';
-        noMessages.style.textAlign = 'center';
-        visualizacaoConversa.appendChild(noMessages);
+        messagesContainer.innerHTML = `
+            <div class="no-messages">
+                <p>Nenhuma mensagem encontrada nesta conversa.</p>
+            </div>
+        `;
+        sessionDetails.appendChild(messagesContainer);
         return;
     }
     
     // Exibir cada mensagem, filtrando a instrução do sistema
     sessao.messages.forEach(msg => {
-        const messageDiv = document.createElement('div');
-        
-        // Determinar se é mensagem do usuário ou do bot
-        const isUserMessage = msg.role === 'user';
-        messageDiv.className = `message ${isUserMessage ? 'user-message' : 'bot-message'}`;
-        
         // Extrair texto da mensagem
         let messageText = '';
         if (msg.parts && Array.isArray(msg.parts)) {
@@ -255,7 +294,7 @@ function exibirConversaDetalhada(sessao) {
             messageText = msg.text;
         }
         
-        // Filtrar a instrução do sistema (system instruction)
+        // Filtrar a instrução do sistema
         const systemInstructionKeywords = [
             'Você é o Chatbot Musical',
             'assistente virtual especializado em música',
@@ -274,22 +313,24 @@ function exibirConversaDetalhada(sessao) {
         
         // Pular mensagens que são instruções do sistema
         if (isSystemInstruction) {
-            return; // Pula esta mensagem
+            return;
         }
         
-        // Formatar texto com quebras de linha
-        messageDiv.innerHTML = messageText.replace(/\n/g, '<br>');
+        const messageDiv = document.createElement('div');
+        const isUserMessage = msg.role === 'user';
+        messageDiv.className = `session-message ${isUserMessage ? 'user' : 'bot'}`;
         
-        // Adicionar timestamp se disponível
-        if (msg.timestamp) {
-            const timestampSpan = document.createElement('span');
-            timestampSpan.className = 'message-timestamp';
-            timestampSpan.textContent = new Date(msg.timestamp).toLocaleTimeString('pt-BR');
-            messageDiv.appendChild(timestampSpan);
-        }
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                ${messageText.replace(/\n/g, '<br>')}
+                ${msg.timestamp ? `<span class="message-time">${new Date(msg.timestamp).toLocaleTimeString('pt-BR')}</span>` : ''}
+            </div>
+        `;
         
-        visualizacaoConversa.appendChild(messageDiv);
+        messagesContainer.appendChild(messageDiv);
     });
+    
+    sessionDetails.appendChild(messagesContainer);
 }
 
 // Função para mostrar/esconder o histórico
@@ -326,7 +367,8 @@ async function sendMessage() {
         }
         
         // Envia a mensagem para o servidor com o histórico da API
-        const response = await fetch('https://chatbot-dny3.onrender.com/chat', {
+        const backendUrl = 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -346,11 +388,13 @@ async function sendMessage() {
         const data = await response.json();
         console.log("Resposta do servidor:", data);
         
-        // Atualiza o histórico da API
-        apiChatHistory = data.history;
-        
         // Adiciona a resposta do bot à interface
         addMessage(data.response);
+        
+        // Se recebemos um novo histórico do servidor, atualizamos
+        if (data.history) {
+            apiChatHistory = data.history;
+        }
         
         // Salva o histórico após cada interação
         await salvarHistoricoSessao();
@@ -391,6 +435,218 @@ async function testTimeFunction() {
 
 
 // Event Listeners
+// Função para excluir uma sessão de chat
+async function excluirSessao(sessionId, sessionCard) {
+    try {
+        const result = await showConfirmDialog('Excluir Conversa', 'Tem certeza que deseja excluir esta conversa?');
+        if (!result) return;
+
+        const backendUrl = 'http://localhost:3001';
+        console.log('Tentando excluir sessão:', sessionId);
+        
+        const response = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao excluir conversa');
+        }
+
+        // Animação de fade out antes de remover
+        sessionCard.style.opacity = '0';
+        setTimeout(() => {
+            sessionCard.remove();
+            
+            // Se não houver mais sessões, mostrar mensagem
+            if (sessionsList.children.length === 0) {
+                sessionsList.innerHTML = `
+                    <div class="no-history">
+                        <p>Nenhuma conversa salva ainda.</p>
+                    </div>
+                `;
+            }
+        }, 300);
+        
+        showToast('Conversa excluída com sucesso');
+        console.log('Sessão excluída com sucesso');
+    } catch (error) {
+        console.error('Erro ao excluir conversa:', error);
+        showToast('Não foi possível excluir a conversa. Por favor, tente novamente.', 'error');
+    }
+}
+
+// Função para obter e salvar o título de uma sessão de chat
+async function obterESalvarTitulo(sessionId, sessionCard) {
+    const backendUrl = 'http://localhost:3001';
+    const titleElement = sessionCard.querySelector('.session-header h3');
+    const originalTitle = titleElement.textContent;
+
+    try {
+        // Mostrar dialog personalizado para editar título
+        const newTitle = await showEditTitleDialog('Editar Título', originalTitle);
+        
+        if (!newTitle || newTitle === originalTitle) {
+            return;
+        }
+
+        // Mostrar loading no título
+        titleElement.innerHTML = `
+            <div class="loading-title">
+                <span class="loading-dots"></span>
+                Salvando...
+            </div>
+        `;
+
+        console.log('Salvando novo título para sessão:', sessionId);
+        
+        // Salvar novo título
+        const saveResponse = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ titulo: newTitle })
+        });
+
+        if (!saveResponse.ok) {
+            const errorData = await saveResponse.json();
+            throw new Error(errorData.error || 'Erro ao salvar título');
+        }
+
+        // Atualizar título na interface com animação
+        titleElement.style.opacity = '0';
+        setTimeout(() => {
+            titleElement.textContent = newTitle;
+            titleElement.style.opacity = '1';
+        }, 200);
+
+        showToast('Título atualizado com sucesso');
+    } catch (error) {
+        console.error('Erro ao salvar título:', error);
+        showToast('Não foi possível salvar o título. Por favor, tente novamente.', 'error');
+        titleElement.textContent = originalTitle;
+    }
+}
+
+// Funções auxiliares para UI
+function showConfirmDialog(title, message) {
+    return new Promise(resolve => {
+        const dialog = document.createElement('div');
+        dialog.className = 'modal-dialog';
+        dialog.innerHTML = `
+            <div class="dialog-content">
+                <h3>${title}</h3>
+                <p>${message}</p>
+                <div class="dialog-buttons">
+                    <button class="btn-cancel">Cancelar</button>
+                    <button class="btn-confirm">Confirmar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        dialog.querySelector('.btn-cancel').onclick = () => {
+            dialog.remove();
+            resolve(false);
+        };
+        
+        dialog.querySelector('.btn-confirm').onclick = () => {
+            dialog.remove();
+            resolve(true);
+        };
+    });
+}
+
+function showEditTitleDialog(title, currentTitle) {
+    return new Promise(resolve => {
+        const dialog = document.createElement('div');
+        dialog.className = 'modal-dialog';
+        dialog.innerHTML = `
+            <div class="dialog-content">
+                <h3>${title}</h3>
+                <input type="text" class="title-input" value="${currentTitle}" maxlength="50" placeholder="Digite um título para a conversa">
+                <div class="dialog-buttons">
+                    <button class="btn-cancel">Cancelar</button>
+                    <button class="btn-save" disabled>Salvar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(dialog);
+        const input = dialog.querySelector('.title-input');
+        const saveButton = dialog.querySelector('.btn-save');
+        
+        // Habilita/desabilita botão de salvar baseado no input
+        function updateSaveButton() {
+            const newTitle = input.value.trim();
+            saveButton.disabled = !newTitle || newTitle === currentTitle;
+        }
+        
+        input.focus();
+        input.select();
+        
+        input.addEventListener('input', updateSaveButton);
+        
+        dialog.querySelector('.btn-cancel').onclick = () => {
+            dialog.remove();
+            resolve(null);
+        };
+        
+        dialog.querySelector('.btn-save').onclick = () => {
+            const newTitle = input.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                dialog.remove();
+                resolve(newTitle);
+            }
+        };
+        
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const newTitle = input.value.trim();
+                if (newTitle && newTitle !== currentTitle) {
+                    dialog.remove();
+                    resolve(newTitle);
+                }
+            }
+        };
+
+        // Fechar ao clicar fora ou pressionar ESC
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) {
+                dialog.remove();
+                resolve(null);
+            }
+        });
+
+        document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape') {
+                document.removeEventListener('keydown', handler);
+                dialog.remove();
+                resolve(null);
+            }
+        });
+    });
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    document.body.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Remove after animation
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Adiciona os event listeners
     sendButton.addEventListener('click', sendMessage);
@@ -401,15 +657,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Event listeners para o histórico
-    historyButton.addEventListener('click', toggleHistorico);
-    fecharHistoricoBtn.addEventListener('click', () => {
-        historicoContainer.style.display = 'none';
+    historyButton.addEventListener('click', () => {
+        historyModal.style.display = 'flex';
+        updateSessionsList();
+    });
+    
+    historyClose.addEventListener('click', () => {
+        historyModal.style.display = 'none';
+        sessionDetails.style.display = 'none';
+        sessionsList.style.display = 'flex';
+    });
+    
+    backToSessions.addEventListener('click', () => {
+        sessionDetails.style.display = 'none';
+        sessionsList.style.display = 'flex';
     });
     
     // Fechar histórico ao clicar fora dele
-    historicoContainer.addEventListener('click', (e) => {
-        if (e.target === historicoContainer) {
-            historicoContainer.style.display = 'none';
+    historyModal.addEventListener('click', (e) => {
+        if (e.target === historyModal) {
+            historyModal.style.display = 'none';
+            sessionDetails.style.display = 'none';
+            sessionsList.style.display = 'flex';
         }
     });
     

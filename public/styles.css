@@ -1,3 +1,25 @@
+:root {
+    /* Cores base */
+    --primary-color: #ba68c8;
+    --primary-light: #ce93d8;
+    --text-color: #4a148c;
+    --text-secondary: rgba(74, 20, 140, 0.7);
+    --border-color: rgba(186, 104, 200, 0.2);
+    --bg-color: white;
+    
+    /* Cores do chat */
+    --message-bg: rgba(255, 255, 255, 0.8);
+    --user-message-bg: var(--primary-color);
+    --user-message-color: white;
+    --input-bg: rgba(255, 255, 255, 0.8);
+    
+    /* Cores da UI */
+    --card-bg: rgba(255, 255, 255, 0.8);
+    --button-secondary-bg: rgba(186, 104, 200, 0.1);
+    --success-color: #4caf50;
+    --error-color: #f44336;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -12,7 +34,8 @@ body {
     align-items: center;
     min-height: 100vh;
     padding: 20px;
-    color: #4a148c;
+    color: var(--text-color);
+    line-height: 1.5;
 }
 
 .chat-container {
@@ -26,14 +49,12 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: 80vh; /* Altura responsiva em viewports */
-    max-height: 700px;
 }
 
 .chat-header {
     background: linear-gradient(90deg, #ba68c8, #ce93d8);
     color: white;
-    padding: 20px 25px;
+    padding: 25px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -61,7 +82,7 @@ body {
 }
 
 .chat-messages {
-    flex: 1; /* Faz a área de mensagens ocupar todo o espaço disponível */
+    height: 400px;
     overflow-y: auto;
     padding: 20px;
     display: flex;
@@ -92,7 +113,19 @@ body {
     margin: 8px 0;
     border-radius: 15px;
     animation: messageAppear 0.3s ease-out;
-    word-wrap: break-word; /* Garante que palavras longas não quebrem o layout */
+    position: relative;
+    margin-bottom: 25px; /* Espaço para o timestamp */
+}
+
+.message .timestamp {
+    font-size: 12px;
+    color: rgba(74, 20, 140, 0.6);
+    position: absolute;
+    bottom: -20px;
+    right: 5px;
+    padding: 2px 5px;
+    border-radius: 10px;
+    background: rgba(74, 20, 140, 0.1);
 }
 
 .user-message {
@@ -111,7 +144,7 @@ body {
 
 .chat-input {
     display: flex;
-    padding: 15px;
+    padding: 20px;
     background: rgba(255, 255, 255, 0.6);
     border-top: 1px solid rgba(186, 104, 200, 0.2);
 }
@@ -123,41 +156,54 @@ body {
     border-radius: 30px;
     outline: none;
     font-size: 16px;
-    background: rgba(255, 255, 255, 0.8);
-    color: #4a148c;
+    background: var(--input-bg);
+    color: var(--text-color);
     transition: all 0.3s ease;
 }
 
 #user-input::placeholder {
-    color: rgba(74, 20, 140, 0.5);
+    color: var(--text-secondary);
 }
 
 #user-input:focus {
     background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 0 15px rgba(186, 104, 200, 0.2);
+    box-shadow: 0 0 15px var(--border-color);
 }
 
-button {
-    background: linear-gradient(45deg, #ba68c8, #ce93d8);
+/* Botões */
+.chat-input button {
+    background: linear-gradient(45deg, var(--primary-color), var(--primary-light));
     color: white;
     border: none;
-    padding: 15px;
+    padding: 15px 25px;
     border-radius: 30px;
-    margin-left: 10px;
+    margin-left: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 1px;
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-button:hover {
+#send-button::before {
+    content: '📨';
+    font-size: 1.2em;
+}
+
+#history-button {
+    font-size: 0.9em;
+    padding: 15px 20px;
+}
+
+.chat-input button:hover {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(186, 104, 200, 0.4);
 }
 
-button:active {
+.chat-input button:active {
     transform: translateY(0);
 }
 
@@ -169,6 +215,26 @@ button:active {
     border-radius: 5px;
     margin: 10px 0;
     text-align: center;
+}
+
+/* Responsividade */
+@media (max-width: 600px) {
+    .chat-container {
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    .chat-messages {
+        height: calc(100vh - 180px);
+    }
+
+    .message {
+        max-width: 85%;
+    }
+
+    button {
+        padding: 12px 20px;
+    }
 }
 
 /* Animação para mensagens */
@@ -188,32 +254,65 @@ button:active {
     opacity: 0.7;
 }
 
-.typing-dots::after {
-    content: "";
+.typing-dots {
+    display: inline-block;
     animation: typingDots 1.4s infinite;
 }
 
 @keyframes typingDots {
     0%, 20% {
-        content: "";
+        content: "Digitando";
     }
     40% {
-        content: ".";
+        content: "Digitando.";
     }
     60% {
-        content: "..";
+        content: "Digitando..";
     }
-    80%, 100% {
-        content: "...";
+    80% {
+        content: "Digitando...";
     }
+}
+
+/* Modal de Histórico */
+.history-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.history-modal {
+    background: white;
+    width: 80%;
+    max-width: 800px;
+    max-height: 80vh;
+    border-radius: 20px;
+    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    animation: modalAppear 0.3s ease-out;
+}
+
+.history-modal-content {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(80vh - 60px);
 }
 
 /* Estilos para o histórico */
 .history-header {
     position: sticky;
     top: 0;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 15px;
+    background: linear-gradient(90deg, #ba68c8, #ce93d8);
+    color: white;
+    padding: 15px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -222,31 +321,73 @@ button:active {
 }
 
 .history-title {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: bold;
-    color: #4a148c;
+}
+
+.history-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 5px;
+    margin: 0;
 }
 
 .history-subject {
     background: linear-gradient(45deg, #ba68c8, #ce93d8);
     color: white;
-    padding: 10px 15px;
+    padding: 15px 20px;
     border-radius: 10px;
     margin: 15px 0;
     font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .history-message {
-    padding: 10px 15px;
-    margin: 5px 0;
+    padding: 15px 20px;
+    margin: 10px 0;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(186, 104, 200, 0.1);
+    position: relative;
+}
+
+.history-timestamp {
+    font-size: 12px;
+    color: rgba(74, 20, 140, 0.6);
+    position: absolute;
+    right: 10px;
+    top: 5px;
 }
 
 .history-separator {
     height: 1px;
     background: rgba(186, 104, 200, 0.2);
-    margin: 15px 0;
+    margin: 20px 0;
+}
+
+/* Animações para o modal */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Estilos para o botão de voltar */
@@ -259,7 +400,7 @@ button:active {
     cursor: pointer;
     font-weight: bold;
     transition: all 0.3s ease;
-    z-index: 101;
+    margin-bottom: 15px;
 }
 
 .back-button:hover {
@@ -269,432 +410,4 @@ button:active {
 
 .back-button:active {
     transform: translateY(0);
-}
-
-/* Estilo para timestamps no histórico */
-.message-timestamp {
-    display: block;
-    font-size: 11px;
-    margin-top: 5px;
-    opacity: 0.7;
-    text-align: right;
-}
-
-/* Responsividade aprimorada */
-@media (max-width: 768px) {
-    .chat-container {
-        height: 85vh;
-        border-radius: 15px;
-    }
-    
-    .chat-header h1 {
-        font-size: 24px;
-    }
-    
-    .chat-header p {
-        font-size: 14px;
-    }
-    
-    .message {
-        max-width: 85%;
-        padding: 10px 14px;
-    }
-}
-
-@media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-    
-    .chat-container {
-        height: 95vh;
-        border-radius: 10px;
-        max-height: none;
-    }
-    
-    .chat-header {
-        padding: 15px;
-    }
-    
-    .chat-header h1 {
-        font-size: 22px;
-    }
-    
-    .chat-input {
-        padding: 10px;
-    }
-    
-    #user-input {
-        padding: 12px 15px;
-    }
-    
-    button {
-        padding: 12px;
-        font-size: 12px;
-    }
-    
-    .message {
-        max-width: 90%;
-        font-size: 14px;
-    }
-}
-
-@media (max-width: 400px) {
-    .chat-container {
-        height: 98vh;
-        border-radius: 8px;
-    }
-    
-    .chat-header {
-        padding: 12px;
-    }
-    
-    .chat-header h1 {
-        font-size: 20px;
-        margin-bottom: 5px;
-    }
-    
-    .chat-header p {
-        font-size: 12px;
-    }
-    
-    #user-input {
-        padding: 10px 15px;
-        font-size: 14px;
-    }
-    
-    button {
-        padding: 10px;
-        margin-left: 6px;
-        font-size: 11px;
-    }
-    
-    /* Mostrar apenas o ícone para o botão de histórico em telas muito pequenas */
-    #history-button {
-        width: auto;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 40px;
-    }
-    
-    #history-button::before {
-        content: "📜";
-        font-size: 16px;
-    }
-}
-
-/* Suporte para dispositivos em orientação landscape */
-@media (max-height: 500px) and (orientation: landscape) {
-    body {
-        padding: 5px;
-    }
-    
-    .chat-container {
-        height: 95vh;
-        max-height: none;
-    }
-    
-    .chat-header {
-        padding: 8px 15px;
-    }
-    
-    .chat-header h1 {
-        font-size: 18px;
-        margin-bottom: 2px;
-    }
-    
-    .chat-header p {
-        font-size: 12px;
-    }
-    
-    .chat-messages {
-        padding: 10px;
-    }
-    
-    .chat-input {
-        padding: 8px;
-    }
-    
-    #user-input {
-        padding: 8px 15px;
-    }
-    
-    button {
-        padding: 8px 15px;
-        font-size: 12px;
-    }
-}
-
-/* Suporte para telas grandes */
-@media (min-width: 1200px) {
-    .chat-container {
-        max-width: 900px;
-    }
-    
-    .chat-header h1 {
-        font-size: 32px;
-    }
-    
-    .chat-header p {
-        font-size: 18px;
-    }
-    
-    .message {
-        font-size: 16px;
-    }
-}
-
-/* Suporte para dispositivos de alta densidade de pixels */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    .chat-container {
-        box-shadow: 0 10px 40px rgba(186, 104, 200, 0.25);
-    }
-    
-    #user-input:focus {
-        box-shadow: 0 0 18px rgba(186, 104, 200, 0.25);
-    }
-}
-
-/* Melhorias para acessibilidade */
-@media (prefers-reduced-motion: reduce) {
-    .message, button {
-        animation: none;
-        transition: none;
-    }
-    
-    button:hover {
-        transform: none;
-    }
-}
-/* Adicionar apenas os estilos relevantes para timestamps nas mensagens */
-
-/* Estilo para timestamps nas mensagens em tempo real */
-.message .message-timestamp {
-    display: block;
-    font-size: 11px;
-    margin-top: 5px;
-    opacity: 0.7;
-    text-align: right;
-}
-
-/* Ajuste para mensagens do usuário */
-.user-message .message-timestamp {
-    color: rgba(255, 255, 255, 0.8);
-}
-
-/* Ajuste para mensagens do bot */
-.bot-message .message-timestamp {
-    color: rgba(74, 20, 140, 0.7);
-}
-
-/* Espaçamento adicional para mensagens */
-.message {
-    padding-bottom: 20px;  /* Aumentando o padding para acomodar o timestamp */
-}
-
-/* Estilos para a seção de histórico de conversas */
-.historico-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-}
-
-.historico-header {
-    background: linear-gradient(90deg, #ba68c8, #ce93d8);
-    color: white;
-    padding: 20px;
-    border-radius: 15px;
-    margin-bottom: 20px;
-    text-align: center;
-    position: relative;
-    width: 90%;
-    max-width: 800px;
-}
-
-.historico-header h2 {
-    margin: 0;
-    font-size: 24px;
-    text-align: center;
-}
-
-.fechar-btn {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    transition: all 0.3s ease;
-}
-
-.fechar-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
-}
-
-.historico-content {
-    background: white;
-    border-radius: 15px;
-    max-width: 90%;
-    max-height: 70vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    width: 90%;
-    max-width: 800px;
-}
-
-.lista-sessoes-container {
-    padding: 20px;
-    border-bottom: 1px solid rgba(186, 104, 200, 0.2);
-    max-height: 300px;
-    overflow-y: auto;
-    flex-shrink: 0;
-}
-
-.lista-sessoes-container h3 {
-    color: #4a148c;
-    margin-bottom: 15px;
-    font-size: 18px;
-    text-align: center;
-}
-
-#lista-sessoes {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-#lista-sessoes li {
-    background: rgba(186, 104, 200, 0.1);
-    margin: 8px 0;
-    padding: 15px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border-left: 4px solid #ba68c8;
-}
-
-#lista-sessoes li:hover {
-    background: rgba(186, 104, 200, 0.2);
-    transform: translateX(5px);
-}
-
-#lista-sessoes li.sessao-selecionada {
-    background: linear-gradient(45deg, #ba68c8, #ce93d8);
-    color: white;
-}
-
-.conversa-detalhada {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-    max-height: 400px;
-}
-
-.conversa-detalhada h3 {
-    color: #4a148c;
-    margin-bottom: 15px;
-    font-size: 18px;
-    text-align: center;
-}
-
-.conversa-detalhada .message {
-    margin: 10px 0;
-    max-width: 100%;
-}
-
-.conversa-detalhada .user-message {
-    background: linear-gradient(45deg, #ba68c8, #ce93d8);
-    color: white;
-    margin-left: auto;
-    margin-right: 0;
-}
-
-.conversa-detalhada .bot-message {
-    background: rgba(186, 104, 200, 0.1);
-    color: #4a148c;
-    margin-right: auto;
-    margin-left: 0;
-}
-
-.conversa-detalhada .message-timestamp {
-    font-size: 10px;
-    opacity: 0.6;
-    margin-top: 5px;
-}
-
-/* Responsividade para o histórico */
-@media (max-width: 768px) {
-    .historico-container {
-        padding: 10px;
-    }
-    
-    .historico-header,
-    .historico-content {
-        width: 95%;
-    }
-    
-    .historico-content {
-        max-height: 80vh;
-    }
-    
-    .historico-header h2 {
-        font-size: 20px;
-    }
-    
-    .lista-sessoes-container {
-        max-height: 200px;
-    }
-    
-    .conversa-detalhada {
-        max-height: 300px;
-    }
-}
-
-@media (max-width: 480px) {
-    .historico-container {
-        padding: 5px;
-    }
-    
-    .historico-header,
-    .historico-content {
-        width: 100%;
-    }
-    
-    .historico-content {
-        max-height: 85vh;
-    }
-    
-    .historico-header {
-        padding: 15px;
-    }
-    
-    .historico-header h2 {
-        font-size: 18px;
-    }
-    
-    .lista-sessoes-container,
-    .conversa-detalhada {
-        padding: 15px;
-    }
-    
-    #lista-sessoes li {
-        padding: 12px;
-        font-size: 14px;
-    }
 }

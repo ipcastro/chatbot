@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot Musical</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="history-modal.css">
 </head>
 <body>
     <div class="chat-container">
@@ -23,30 +24,31 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
         <div class="chat-input">
             <input type="text" id="user-input" placeholder="Digite sua pergunta sobre música...">
             <button id="send-button">Enviar</button>
-            <button id="history-button">Histórico</button>
+            <button id="history-button">📚 Histórico</button>
         </div>
     </div>
     
-    <!-- Seção de Histórico de Conversas -->
-    <div id="historico-container" class="historico-container" style="display: none;">
-        <div class="historico-header">
-            <h2>📚 Histórico de Conversas</h2>
-            <button id="fechar-historico" class="fechar-btn">✕</button>
-        </div>
-        <div class="historico-content">
-            <div class="lista-sessoes-container">
-                <h3>Conversas Salvas</h3>
-                <ul id="lista-sessoes">
-                    <!-- A lista de sessões será populada aqui via JavaScript -->
-                </ul>
+    <!-- Modal de Histórico -->
+    <div id="history-modal-overlay" class="history-modal-overlay">
+        <div class="history-modal">
+            <div class="history-header">
+                <h2>Histórico de Conversas</h2>
+                <button id="history-close" class="history-close">×</button>
             </div>
-            <div id="visualizacao-conversa-detalhada" class="conversa-detalhada">
-                <!-- O conteúdo de uma conversa selecionada aparecerá aqui -->
+            
+            <!-- Lista de sessões -->
+            <div id="sessions-list" class="sessions-list">
+                <!-- Sessões serão inseridas aqui via JavaScript -->
+            </div>
+            
+            <!-- Visualização detalhada da sessão -->
+            <div id="session-details" class="session-details">
+                <!-- Detalhes da sessão serão inseridos aqui via JavaScript -->
             </div>
         </div>
     </div>
     
-    <!-- Script do cliente (importante carregar após o DOM estar pronto) -->
+    <!-- Script do cliente -->
     <script src="script.js"></script>
 </body>
 </html>

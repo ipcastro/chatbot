@@ -4,8 +4,12 @@ const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const path = require('path');
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
 require('dotenv').config();
+
+// Importar os modelos
+const SessaoChat = require('./models/SessaoChat');
+const Log = require('./models/Log');
 
 // Configuração do servidor Express
 const app = express();
@@ -14,41 +18,30 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
 
-// URLs de conexão e nomes dos bancos
-const mongoUriLogs = process.env.MONGO_URI;
-const mongoUriHistoria = process.env.MONGO_HISTORIA;
+// Rota principal
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-let dbLogs;
-let dbHistoria;
-
-async function connectToMongoDB(uri, dbName) {
-    if (!uri) {
-        console.error(`URI do MongoDB para ${dbName} não definida!`);
-        return null;
-    }
-    const client = new MongoClient(uri);
-    try {
-        await client.connect();
-        console.log(`Conectado ao MongoDB Atlas: ${dbName}`);
-        return client.db(dbName);
-    } catch (err) {
-        console.error(`Falha ao conectar ao MongoDB ${dbName}:`, err);
-        return null;
-    }
-}
-
-async function initializeDatabases(mongoUriLogs, mongoUriHistoria) {
-    dbLogs = await connectToMongoDB(mongoUriLogs, "IIW2023B_Logs");
-    dbHistoria = await connectToMongoDB(mongoUriHistoria, "chatbotHistoriaDB");
-    if (!dbLogs || !dbHistoria) {
-        console.error("Falha ao conectar a um ou mais bancos de dados. Verifique as URIs e configurações.");
-    }
-}
-
-// Inicializa os bancos antes de aceitar requisições
-initializeDatabases(mongoUriLogs, mongoUriHistoria);
+// Conexão com MongoDB usando Mongoose
+mongoose.connect(process.env.MONGO_HISTORIA)
+    .then(() => {
+        console.log('Conectado ao MongoDB via Mongoose');
+        
+        // Iniciar o servidor apenas após conectar ao banco
+        app.listen(PORT, () => {
+            console.log(`Servidor rodando na porta ${PORT}`);
+            console.log(`Acesse http://localhost:${PORT} no seu navegador`);
+        });
+    })
+    .catch((err) => {
+        console.error('Erro ao conectar ao MongoDB:', err);
+        process.exit(1); // Encerra o processo se não conseguir conectar ao banco
+    });
 
 let dadosRankingVitrine = [];
 
@@ -194,8 +187,8 @@ app.post('/chat', async (req, res) => {
       },
     });
 
+    // Inicializa o chat sem histórico primeiro
     const chat = model.startChat({
-      history: history,
       generationConfig: {
         temperature: 0.7,
         top_p: 0.8,
@@ -203,8 +196,22 @@ app.post('/chat', async (req, res) => {
       },
     });
 
-    // Adiciona a instrução do sistema como primeira mensagem
-    await chat.sendMessage(systemInstruction);
+    // Adiciona cada mensagem do histórico sequencialmente
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        try {
+          const text = typeof msg === 'string' ? msg :
+                      msg.message || msg.text ||
+                      (msg.parts && msg.parts[0] && msg.parts[0].text) ||
+                      JSON.stringify(msg);
+          
+          await chat.sendMessage(text);
+        } catch (historyError) {
+          console.error("Erro ao processar mensagem do histórico:", historyError);
+          // Continua mesmo se houver erro em uma mensagem do histórico
+        }
+      }
+    }
 
     let currentApiRequestContents = message;
     let modelResponse;
@@ -359,30 +366,29 @@ app.post('/chat', async (req, res) => {
 });
 
 app.post('/api/log-connection', async (req, res) => {
-    const { ip, acao } = req.body;
-    const nomeBot = "IFCODE SuperBot"; // Troque para o nome do seu bot!
-
-    if (!ip || !acao) {
-        return res.status(400).json({ error: "Dados de log incompletos (IP e ação são obrigatórios)." });
-    }
-
-    const agora = new Date();
-    const dataFormatada = agora.toISOString().split('T')[0]; // YYYY-MM-DD
-    const horaFormatada = agora.toTimeString().split(' ')[0]; // HH:MM:SS
-
-    const logEntry = {
-        col_data: dataFormatada,
-        col_hora: horaFormatada,
-        col_IP: ip,
-        col_nome_bot: nomeBot,
-        col_acao: acao
-    };
-
     try {
-        const collection = dbLogs.collection("tb_cl_user_log_acess");
-        await collection.insertOne(logEntry);
+        const { ip, acao } = req.body;
+        const nomeBot = "IFCODE SuperBot"; // Troque para o nome do seu bot!
+
+        if (!ip || !acao) {
+            return res.status(400).json({ error: "Dados de log incompletos (IP e ação são obrigatórios)." });
+        }
+
+        const agora = new Date();
+        const dataFormatada = agora.toISOString().split('T')[0]; // YYYY-MM-DD
+        const horaFormatada = agora.toTimeString().split(' ')[0]; // HH:MM:SS
+
+        await Log.create({
+            col_data: dataFormatada,
+            col_hora: horaFormatada,
+            col_IP: ip,
+            col_nome_bot: nomeBot,
+            col_acao: acao
+        });
+
         res.status(201).json({ message: "Log registrado com sucesso." });
     } catch (error) {
+        console.error("[Servidor] Erro ao registrar log:", error);
         res.status(500).json({ error: "Erro ao registrar log." });
     }
 });
@@ -644,12 +650,45 @@ app.post('/chat', async (req, res) => {
       generation_config: { temperature: 0.7 },
     });
 
-    const chat = model.startChat();
+    // Formata o histórico para o formato correto
+    const formattedHistory = [];
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        try {
+          const text = typeof msg === 'string' ? msg : 
+                      msg.message || msg.text || 
+                      (msg.parts && msg.parts[0] && msg.parts[0].text) || 
+                      JSON.stringify(msg);
+
+          formattedHistory.push({
+            role: msg.isUser ? 'user' : 'assistant',
+            parts: [{ text }]
+          });
+        } catch (error) {
+          console.error('Erro ao formatar mensagem do histórico:', error);
+        }
+      }
+    }
+
+    // Adiciona a instrução do sistema como primeira mensagem do histórico
+    formattedHistory.unshift({
+      role: 'assistant',
+      parts: [{ text: systemInstruction }]
+    });
+
+    console.log('Histórico formatado:', JSON.stringify(formattedHistory, null, 2));
+
+    // Inicia o chat com o histórico formatado
+    const chat = model.startChat({
+      history: formattedHistory,
+      generationConfig: { 
+        temperature: 0.7,
+        topP: 0.8,
+        topK: 40
+      }
+    });
     
-    // Primeira chamada com a mensagem do usuário
-    currentApiRequestContents = message; // Envia apenas a string da mensagem
-    
-    let currentApiRequestContents = message; // <-- CORRETO: apenas a string
+    let currentApiRequestContents = message; // Envia a mensagem atual
     let modelResponse; // Para armazenar a resposta do modelo (`GenerateContentResponse`)
     let loopCount = 0;
     const MAX_FUNCTION_CALL_LOOPS = 5;
@@ -661,8 +700,20 @@ app.post('/chat', async (req, res) => {
       // `sendMessage` espera um `string` ou `Part[]` ou `GenerateContentRequest`
       // Se `currentApiRequestContents` for um array de `FunctionResponsePart`, está correto.
       // Se for a primeira mensagem do usuário, `message` (string) é usado.
-      const messageToSend = (loopCount === 1) ? currentApiRequestContents : currentApiRequestContents;
-      const result = await chat.sendMessage(messageToSend); // `result` é `EnhancedGenerateContentResponse`
+      let result;
+      try {
+        if (loopCount === 1) {
+          // Na primeira iteração, envie apenas a mensagem do usuário como string
+          result = await chat.sendMessage(message);
+        } else {
+          // Para as chamadas de função, converte o array em uma string JSON
+          const functionResponseStr = JSON.stringify(currentApiRequestContents);
+          result = await chat.sendMessage(functionResponseStr);
+        }
+      } catch (sendError) {
+        console.error(`Erro ao enviar mensagem (loop ${loopCount}):`, sendError);
+        throw sendError;
+      }
       
       modelResponse = result.response; // `modelResponse` é `GenerateContentResponse`
 
@@ -797,31 +848,33 @@ async function registrarAcessoBotParaRanking(botId, nomeBot) {
 }
 
 app.post('/api/chat/salvar-historico', async (req, res) => {
-    if (!dbHistoria) {
-        return res.status(500).json({ error: "Servidor não conectado ao banco de dados de histórico." });
-    }
-
     try {
         const { sessionId, userId, botId, startTime, endTime, messages } = req.body;
 
-        if (!sessionId || !botId || !messages || !Array.isArray(messages) || messages.length === 0) {
-            return res.status(400).json({ error: "Dados incompletos para salvar histórico (sessionId, botId, messages são obrigatórios)." });
+        if (!sessionId || !messages || !Array.isArray(messages)) {
+            return res.status(400).json({ error: "Dados incompletos para salvar histórico (sessionId e messages são obrigatórios)." });
         }
 
-        const novaSessao = {
+        // Formatar as mensagens para garantir estrutura correta
+        const formattedMessages = messages.map(msg => ({
+            role: msg.role || (msg.isUser ? 'user' : 'assistant'),
+            parts: [{
+                text: msg.message || msg.text || msg.parts?.[0]?.text || msg
+            }]
+        }));
+
+        const novaSessao = new SessaoChat({
             sessionId,
             userId: userId || 'anonimo',
-            botId,
+            botId: botId || 'IFCODE SuperBot',
             startTime: startTime ? new Date(startTime) : new Date(),
             endTime: endTime ? new Date(endTime) : new Date(),
-            messages,
-            loggedAt: new Date()
-        };
+            messages: formattedMessages
+        });
 
-        const collection = dbHistoria.collection("sessoesChat");
-        const result = await collection.insertOne(novaSessao);
+        await novaSessao.save();
 
-        console.log('[Servidor] Histórico de sessão salvo:', result.insertedId);
+        console.log('[Servidor] Histórico de sessão salvo:', novaSessao._id);
         res.status(201).json({ message: "Histórico de chat salvo com sucesso!", sessionId: novaSessao.sessionId });
 
     } catch (error) {
@@ -832,12 +885,22 @@ app.post('/api/chat/salvar-historico', async (req, res) => {
 
 async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messages) {
     try {
+        const backendUrl = 'http://localhost:3001';
+        
+        // Formatar as mensagens para garantir estrutura correta
+        const formattedMessages = messages.map(msg => ({
+            role: msg.role || (msg.isUser ? 'user' : 'assistant'),
+            parts: [{
+                text: msg.message || msg.text || msg.parts?.[0]?.text || msg
+            }]
+        }));
+
         const payload = {
             sessionId,
             botId,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
-            messages // O array chatHistory completo
+            messages: formattedMessages
         };
 
         const response = await fetch(`${backendUrl}/api/chat/salvar-historico`, {
@@ -858,17 +921,95 @@ async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messa
     }
 }
 
-app.get('/api/chat/historicos', async (req, res) => {
-    if (!dbHistoria) {
-        return res.status(500).json({ error: "Servidor não conectado ao banco de dados de histórico." });
-    }
-    
+// Endpoint para excluir uma sessão de chat
+app.delete('/api/chat/historicos/:id', async (req, res) => {
     try {
-        const collection = dbHistoria.collection("sessoesChat");
-        const historicos = await collection.find({})
-                                            .sort({ startTime: -1 })
-                                            .limit(10)
-                                            .toArray(); // Converte o cursor para um array
+        console.log('Tentando excluir documento com ID:', req.params.id);
+        const result = await SessaoChat.findByIdAndDelete(req.params.id);
+        
+        console.log('Resultado da exclusão:', result);
+        
+        if (!result) {
+            return res.status(404).json({ error: "Histórico não encontrado." });
+        }
+        
+        res.json({ message: "Histórico excluído com sucesso." });
+    } catch (error) {
+        console.error("[Servidor] Erro ao excluir histórico:", error);
+        res.status(500).json({ error: "Erro interno ao excluir histórico de chat." });
+    }
+});
+
+// Endpoint para gerar título para uma sessão
+app.post('/api/chat/historicos/:id/gerar-titulo', async (req, res) => {
+    try {
+        console.log('Tentando gerar título para documento com ID:', req.params.id);
+        const sessao = await SessaoChat.findById(req.params.id);
+        
+        if (!sessao) {
+            return res.status(404).json({ error: "Histórico não encontrado." });
+        }
+
+        // Formata o histórico da conversa para a IA
+        const mensagens = [];
+        sessao.messages.forEach(msg => {
+            if (msg.role === 'user') {
+                mensagens.push(`Usuário: ${msg.parts[0].text}`);
+            } else if (msg.role === 'model') {
+                mensagens.push(`Bot: ${msg.parts[0].text}`);
+            }
+        });
+
+        const historicoFormatado = mensagens.join("\n");
+        console.log('Histórico formatado:', historicoFormatado);
+
+        // Gera o título usando a API Gemini
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const prompt = `Com base nesta conversa, sugira um título curto e conciso de no máximo 5 palavras que capture o tema principal do diálogo:\n\n${historicoFormatado}`;
+        
+        console.log('Enviando prompt para Gemini:', prompt);
+        const result = await model.generateContent(prompt);
+        const titulo = result.response.text();
+        console.log('Título gerado:', titulo);
+
+        res.json({ titulo: titulo.trim() });
+    } catch (error) {
+        console.error("[Servidor] Erro ao gerar título:", error);
+        res.status(500).json({ error: "Erro interno ao gerar título: " + error.message });
+    }
+});
+
+// Endpoint para atualizar o título de uma sessão
+app.put('/api/chat/historicos/:id/titulo', async (req, res) => {
+    try {
+        const { titulo } = req.body;
+        if (!titulo) {
+            return res.status(400).json({ error: "Título não fornecido." });
+        }
+
+        const sessao = await SessaoChat.findByIdAndUpdate(
+            req.params.id,
+            { titulo: titulo },
+            { new: true }
+        );
+
+        if (!sessao) {
+            return res.status(404).json({ error: "Histórico não encontrado." });
+        }
+
+        res.json({ message: "Título atualizado com sucesso." });
+    } catch (error) {
+        console.error("[Servidor] Erro ao atualizar título:", error);
+        res.status(500).json({ error: "Erro interno ao atualizar título: " + error.message });
+    }
+});
+
+app.get('/api/chat/historicos', async (req, res) => {
+    try {
+        const historicos = await SessaoChat.find({})
+            .sort({ startTime: -1 })
+            .limit(10)
+            .exec();
         
         console.log(`[Servidor] Buscados ${historicos.length} históricos de chat`);
         res.json(historicos);
@@ -879,7 +1020,9 @@ app.get('/api/chat/historicos', async (req, res) => {
     }
 });
 
-// Iniciar o servidor
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+// Rota de teste
+app.get('/test', (req, res) => {
+    res.json({ message: 'Servidor está funcionando!' });
 });
+
+// Nota: O servidor será iniciado após a conexão com o MongoDB ser estabelecida

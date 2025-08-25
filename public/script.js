@@ -126,7 +126,7 @@ function isTimeRelatedQuestion(message) {
 // Função para salvar histórico da sessão
 async function salvarHistoricoSessao() {
     try {
-        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        const backendUrl = 'https://chatbot-dny3.onrender.com';
         
         // Formata as mensagens garantindo a estrutura correta
         const formattedMessages = apiChatHistory.map(msg => ({
@@ -173,7 +173,7 @@ async function salvarHistoricoSessao() {
 // Função para carregar histórico de sessões do backend
 async function updateSessionsList() {
     try {
-        const backendUrl = 'https://chatbot-dny3.onrender.com/'; // URL fixa para desenvolvimento local
+        const backendUrl = 'https://chatbot-dny3.onrender.com'; // URL fixa para desenvolvimento local
             
         const response = await fetch(`${backendUrl}/api/chat/historicos`);
         if (!response.ok) {
@@ -391,7 +391,7 @@ async function sendMessage() {
         }
         
         // Envia a mensagem para o servidor com o histórico da API
-        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        const backendUrl = 'https://chatbot-dny3.onrender.com';
         
         // Formata o histórico para garantir consistência e compatibilidade com o modelo
         const formattedHistory = apiChatHistory.map(msg => {
@@ -527,7 +527,7 @@ async function excluirSessao(sessionId, sessionCard) {
         const result = await showConfirmDialog('Excluir Conversa', 'Tem certeza que deseja excluir esta conversa?');
         if (!result) return;
 
-        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        const backendUrl = 'https://chatbot-dny3.onrender.com';
         console.log('Tentando excluir sessão:', sessionId);
         
         const response = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
@@ -564,7 +564,7 @@ async function excluirSessao(sessionId, sessionCard) {
 
 // Função para obter e salvar o título de uma sessão de chat
 async function obterESalvarTitulo(sessionId, sessionCard) {
-    const backendUrl = 'https://chatbot-dny3.onrender.com/';
+    const backendUrl = 'https://chatbot-dny3.onrender.com';
     const titleElement = sessionCard.querySelector('.session-header h3');
     const originalTitle = titleElement.textContent;
 

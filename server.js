@@ -895,7 +895,7 @@ app.post('/api/chat/salvar-historico', async (req, res) => {
 
 async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messages) {
     try {
-        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        const backendUrl = 'https://chatbot-dny3.onrender.com';
         
         // Formatar as mensagens para garantir estrutura correta
         const formattedMessages = messages.map(msg => ({

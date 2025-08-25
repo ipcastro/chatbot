@@ -1,4 +1,5 @@
 // Elementos do DOM
+// Elementos do DOM - usando let para permitir reatribuição se necessário
 const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('user-input');
 const sendButton = document.getElementById('send-button');
@@ -7,7 +8,7 @@ const historyModal = document.getElementById('history-modal-overlay');
 const historyClose = document.getElementById('history-close');
 const sessionsList = document.getElementById('sessions-list');
 const sessionDetails = document.getElementById('session-details');
-const backToSessions = document.getElementById('back-to-sessions');
+let backToSessions = null; // Será atribuído dinamicamente quando necessário
 
 // Array para armazenar o histórico de conversas para exibição
 const conversationHistory = [];
@@ -17,10 +18,15 @@ let apiChatHistory = [];
 
 // Função para formatar mensagem para o histórico da API
 function formatMessageForHistory(message, isUser) {
+    // Garante que a mensagem é uma string
+    const messageText = typeof message === 'string' ? message : 
+                       (message.text || message.message || JSON.stringify(message));
+    
     return {
-        role: isUser ? 'user' : 'assistant',
-        text: message,
-        timestamp: new Date().toISOString()
+        role: isUser ? 'user' : 'model',
+        parts: [{
+            text: messageText
+        }]
     }
 }
 
@@ -120,14 +126,27 @@ function isTimeRelatedQuestion(message) {
 // Função para salvar histórico da sessão
 async function salvarHistoricoSessao() {
     try {
-        const backendUrl = 'http://localhost:3001'; // URL fixa para desenvolvimento local
+        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        
+        // Formata as mensagens garantindo a estrutura correta
+        const formattedMessages = apiChatHistory.map(msg => ({
+            role: msg.role || (msg.isUser ? 'user' : 'assistant'),
+            parts: [{
+                text: typeof msg.text === 'string' ? msg.text :
+                      msg.message || 
+                      (msg.parts && msg.parts[0] && msg.parts[0].text) ||
+                      JSON.stringify(msg)
+            }],
+            timestamp: msg.timestamp || new Date().toISOString()
+        }));
             
         const payload = {
             sessionId: currentSessionId,
+            userId: 'anonimo',
             botId: "IFCODE SuperBot",
             startTime: chatStartTime.toISOString(),
             endTime: new Date().toISOString(),
-            messages: apiChatHistory // O array completo do histórico da API
+            messages: formattedMessages
         };
 
         const response = await fetch(`${backendUrl}/api/chat/salvar-historico`, {
@@ -137,21 +156,24 @@ async function salvarHistoricoSessao() {
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error("Falha ao salvar histórico:", errorData.error || response.statusText);
-        } else {
-            const result = await response.json();
-            console.log("Histórico de sessão salvo:", result.message);
+            const errorText = await response.text();
+            console.error("Resposta do servidor ao salvar histórico:", errorText);
+            throw new Error("Não foi possível salvar o histórico da conversa. Por favor, tente novamente.");
         }
+
+        const result = await response.json();
+        console.log("Histórico de sessão salvo:", result.message);
+        
     } catch (error) {
         console.error("Erro ao enviar histórico de sessão:", error);
+        throw new Error("Ocorreu um erro ao salvar a conversa. Por favor, tente novamente.");
     }
 }
 
 // Função para carregar histórico de sessões do backend
 async function updateSessionsList() {
     try {
-        const backendUrl = 'http://localhost:3001'; // URL fixa para desenvolvimento local
+        const backendUrl = 'https://chatbot-dny3.onrender.com/'; // URL fixa para desenvolvimento local
             
         const response = await fetch(`${backendUrl}/api/chat/historicos`);
         if (!response.ok) {
@@ -256,11 +278,13 @@ function showSessionDetails(sessao) {
     `;
     
     // Adicionar event listener para o botão voltar
-    const backButton = header.querySelector('#back-to-sessions');
-    backButton.addEventListener('click', () => {
-        sessionDetails.style.display = 'none';
-        sessionsList.style.display = 'flex';
-    });
+    backToSessions = header.querySelector('#back-to-sessions');
+    if (backToSessions) {
+        backToSessions.addEventListener('click', () => {
+            sessionDetails.style.display = 'none';
+            sessionsList.style.display = 'flex';
+        });
+    }
     
     sessionDetails.appendChild(header);
     
@@ -367,14 +391,58 @@ async function sendMessage() {
         }
         
         // Envia a mensagem para o servidor com o histórico da API
-        const backendUrl = 'http://localhost:3001';
+        const backendUrl = 'https://chatbot-dny3.onrender.com/';
+        
+        // Formata o histórico para garantir consistência e compatibilidade com o modelo
+        const formattedHistory = apiChatHistory.map(msg => {
+            // Primeiro, tenta obter o texto da mensagem
+            let messageText = '';
+            if (typeof msg.text === 'string') {
+                messageText = msg.text;
+            } else if (msg.message) {
+                messageText = msg.message;
+            } else if (msg.parts && msg.parts[0] && msg.parts[0].text) {
+                messageText = msg.parts[0].text;
+            } else {
+                messageText = JSON.stringify(msg);
+            }
+
+            // Determina o papel (role) da mensagem
+            let role = msg.role;
+            if (!role) {
+                if (msg.isUser) {
+                    role = 'user';
+                } else if (role === 'assistant') {
+                    role = 'model';
+                } else {
+                    role = 'model';
+                }
+            }
+
+            // Retorna o objeto formatado
+            return {
+                role: role,
+                parts: [{
+                    text: messageText
+                }]
+            };
+        });
+        
+        // Prepara a requisição com o formato correto para o modelo
+        const requestBody = {
+            message: message,
+            history: formattedHistory.filter(msg => msg && msg.parts && msg.parts[0] && msg.parts[0].text)
+        };
+
+        console.log('Enviando para o servidor:', JSON.stringify(requestBody, null, 2));
+
         const response = await fetch(`${backendUrl}/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: message,
-                history: apiChatHistory
-            })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
         });
         
         // Remove o indicador de digitação
@@ -402,7 +470,25 @@ async function sendMessage() {
     } catch (error) {
         console.error('Erro ao conversar com o bot:', error);
         removeTypingIndicator();
-        showError('Desculpe, tive um problema ao processar sua mensagem. Por favor, tente novamente.');
+        
+        let mensagemErro = 'Desculpe, tive um problema ao processar sua mensagem. Por favor, tente novamente.';
+        
+        try {
+            if (error.message.includes('salvar')) {
+                mensagemErro = 'Ops! Tive um problema ao salvar nossa conversa, mas você pode continuar conversando normalmente.';
+            } else if (error.message.includes('500')) {
+                // Tenta obter mais detalhes do erro
+                const errorDetails = await error.response?.text();
+                console.error('Detalhes do erro 500:', errorDetails);
+                mensagemErro = 'Desculpe, ocorreu um erro interno no servidor. Por favor, aguarde um momento e tente novamente.';
+            } else if (!navigator.onLine) {
+                mensagemErro = 'Parece que você está sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.';
+            }
+        } catch (e) {
+            console.error('Erro ao processar detalhes do erro:', e);
+        }
+        
+        showError(mensagemErro);
     } finally {
         // Reabilita o input e o botão após o processamento
         userInput.disabled = false;
@@ -441,7 +527,7 @@ async function excluirSessao(sessionId, sessionCard) {
         const result = await showConfirmDialog('Excluir Conversa', 'Tem certeza que deseja excluir esta conversa?');
         if (!result) return;
 
-        const backendUrl = 'http://localhost:3001';
+        const backendUrl = 'https://chatbot-dny3.onrender.com/';
         console.log('Tentando excluir sessão:', sessionId);
         
         const response = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
@@ -478,7 +564,7 @@ async function excluirSessao(sessionId, sessionCard) {
 
 // Função para obter e salvar o título de uma sessão de chat
 async function obterESalvarTitulo(sessionId, sessionCard) {
-    const backendUrl = 'http://localhost:3001';
+    const backendUrl = 'https://chatbot-dny3.onrender.com/';
     const titleElement = sessionCard.querySelector('.session-header h3');
     const originalTitle = titleElement.textContent;
 
@@ -648,30 +734,33 @@ function showToast(message, type = 'success') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Adiciona os event listeners
-    sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
+    // Verifica e adiciona event listeners para elementos essenciais
+    if (sendButton && userInput) {
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    } else {
+        console.error('Elementos essenciais do chat não encontrados');
+    }
     
-    // Event listeners para o histórico
-    historyButton.addEventListener('click', () => {
-        historyModal.style.display = 'flex';
-        updateSessionsList();
-    });
+    // Event listeners para o histórico - com verificações de existência
+    if (historyButton && historyModal) {
+        historyButton.addEventListener('click', () => {
+            historyModal.style.display = 'flex';
+            updateSessionsList();
+        });
+    }
     
-    historyClose.addEventListener('click', () => {
-        historyModal.style.display = 'none';
-        sessionDetails.style.display = 'none';
-        sessionsList.style.display = 'flex';
-    });
-    
-    backToSessions.addEventListener('click', () => {
-        sessionDetails.style.display = 'none';
-        sessionsList.style.display = 'flex';
-    });
+    if (historyClose) {
+        historyClose.addEventListener('click', () => {
+            if (historyModal) historyModal.style.display = 'none';
+            if (sessionDetails) sessionDetails.style.display = 'none';
+            if (sessionsList) sessionsList.style.display = 'flex';
+        });
+    }
     
     // Fechar histórico ao clicar fora dele
     historyModal.addEventListener('click', (e) => {

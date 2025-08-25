@@ -35,7 +35,7 @@ mongoose.connect(process.env.MONGO_HISTORIA)
         // Iniciar o servidor apenas após conectar ao banco
         app.listen(PORT, () => {
             console.log(`Servidor rodando na porta ${PORT}`);
-            console.log(`Acesse http://localhost:${PORT} no seu navegador`);
+            //console.log(`Acesse http://localhost:${PORT} no seu navegador`);
         });
     })
     .catch((err) => {
@@ -159,15 +159,15 @@ app.post('/chat', async (req, res) => {
       
       let response = "";
       if (isDataQuestion && isHoraQuestion) {
-        response = `Agora são ${timeData.currentTime} 🕒`;
+        response = `Olá! 😊\n\nAgora são:\n${timeData.currentTime} 🕒`;
       } else if (isDataQuestion) {
-        response = `Hoje é ${timeData.dayOfWeek}, ${timeData.dayOfMonth} de ${timeData.month} de ${timeData.year} 📅`;
+        response = `Olá! 😊\n\nHoje é:\n${timeData.dayOfWeek}, ${timeData.dayOfMonth} de ${timeData.month} de ${timeData.year} 📅`;
       } else {
-        response = `Agora são ${timeData.hours}:${timeData.minutes.toString().padStart(2, '0')}:${timeData.seconds.toString().padStart(2, '0')} 🕒`;
+        response = `Olá! 😊\n\nAgora são:\n${timeData.hours}:${timeData.minutes.toString().padStart(2, '0')}:${timeData.seconds.toString().padStart(2, '0')} 🕒`;
       }
       
-      // Adiciona uma resposta mais amigável e musical
-      response += "\n\nQue tal ouvirmos uma música para celebrar esse momento? 🎵 Posso te ajudar a encontrar uma música específica ou explorar um gênero que você goste!";
+      // Adiciona uma resposta mais amigável e musical com mais espaçamento
+      response += "\n\n--------------------\n\nQue tal ouvirmos uma música para celebrar esse momento? 🎵\nPosso te ajudar a encontrar uma música específica ou explorar um gênero que você goste! 🎸";
       
       return res.json({
         response: response,
@@ -186,6 +186,12 @@ app.post('/chat', async (req, res) => {
         top_k: 40
       },
     });
+
+    // Força o modelo a responder em português
+    const languageInstruction = {
+      role: 'user',
+      parts: [{ text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.' }]
+    };
 
     // Inicializa o chat sem histórico primeiro
     const chat = model.startChat({
@@ -602,8 +608,9 @@ const functionDeclarations = [
   }
 ];
 
-const systemInstruction = `Você é o Chatbot Musical, um assistente virtual especializado em música.
-Você deve responder principalmente sobre temas relacionados à música.
+const systemInstruction = `Você é o Chatbot Musical, um assistente virtual brasileiro especializado em música.
+IMPORTANTE: Você DEVE SEMPRE responder em português do Brasil, usando linguagem informal e amigável.
+Você deve responder principalmente sobre temas relacionados à música, mantendo um tom alegre e acolhedor.
 Você tem acesso às seguintes funções:
 - getCurrentTime: Para informar a hora e data atuais no Brasil (horário de Brasília).
 - getWeather: Para verificar o clima em uma cidade (você pode relacionar com músicas sobre o clima ou humor).
@@ -670,11 +677,14 @@ app.post('/chat', async (req, res) => {
       }
     }
 
-    // Adiciona a instrução do sistema como primeira mensagem do histórico
-    formattedHistory.unshift({
-      role: 'assistant',
-      parts: [{ text: systemInstruction }]
-    });
+    // Adiciona as instruções iniciais
+    formattedHistory.unshift(
+      {
+        role: 'assistant',
+        parts: [{ text: systemInstruction }]
+      },
+      languageInstruction // Adiciona a instrução de idioma
+    );
 
     console.log('Histórico formatado:', JSON.stringify(formattedHistory, null, 2));
 
@@ -885,7 +895,7 @@ app.post('/api/chat/salvar-historico', async (req, res) => {
 
 async function salvarHistoricoSessao(sessionId, botId, startTime, endTime, messages) {
     try {
-        const backendUrl = 'http://localhost:3001';
+        const backendUrl = 'https://chatbot-dny3.onrender.com/';
         
         // Formatar as mensagens para garantir estrutura correta
         const formattedMessages = messages.map(msg => ({

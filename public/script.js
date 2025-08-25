@@ -436,7 +436,7 @@ async function sendMessage() {
 
         console.log('Enviando para o servidor:', JSON.stringify(requestBody, null, 2));
 
-        const response = await fetch(`${backendUrl}chat`, {
+        const response = await fetch(`${backendUrl}/chat`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',

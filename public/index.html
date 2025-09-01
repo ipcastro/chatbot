@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot Musical</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="history-modal.css">
+    <link rel="stylesheet" href="history-modal.css"> <!-- Adicionado -->
 </head>
 <body>
     <div class="chat-container">
@@ -29,10 +29,10 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
     </div>
     
     <!-- Modal de Histórico -->
-    <div id="history-modal-overlay" class="history-modal-overlay">
+    <div id="history-modal-overlay" class="history-modal-overlay" style="display: none;">
         <div class="history-modal">
             <div class="history-header">
-                <h2>Histórico de Conversas</h2>
+                <h2 id="history-modal-title">Histórico de Conversas</h2>
                 <button id="history-close" class="history-close">×</button>
             </div>
             
@@ -42,7 +42,7 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
             </div>
             
             <!-- Visualização detalhada da sessão -->
-            <div id="session-details" class="session-details">
+            <div id="session-details" class="session-details" style="display: none;">
                 <!-- Detalhes da sessão serão inseridos aqui via JavaScript -->
             </div>
         </div>

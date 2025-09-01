@@ -1002,7 +1002,7 @@ app.post('/api/chat/historicos/:id/gerar-titulo', async (req, res) => {
 });
 
 // Endpoint para atualizar o título de uma sessão
-app.put('/api/chat/historicos/:id/titulo', async (req, res) => {
+app.put('/api/chat/historicos/:id/:titulo', async (req, res) => {
     try {
         const { titulo } = req.body;
         if (!titulo) {
@@ -1011,7 +1011,7 @@ app.put('/api/chat/historicos/:id/titulo', async (req, res) => {
 
         const sessao = await SessaoChat.findByIdAndUpdate(
             req.params.id,
-            { titulo: titulo },
+            { titulo: req.params.titulo },
             { new: true }
         );
 

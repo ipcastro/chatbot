@@ -585,7 +585,7 @@ async function obterESalvarTitulo(sessionId, sessionCard) {
         console.log('Salvando novo título para sessão:', sessionId);
         
         // Salvar novo título
-        const saveResponse = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
+        const saveResponse = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}/${newTitle}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'

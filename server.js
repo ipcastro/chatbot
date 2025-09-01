@@ -630,7 +630,7 @@ REGRAS IMPORTANTES:
 
 
 // Adiciona instruções iniciais
-formattedHistory.unshift(
+/*formattedHistory.unshift(
   {
     role: 'system',
     parts: [{ text: systemInstruction }]
@@ -639,7 +639,7 @@ formattedHistory.unshift(
     role: 'system',
     parts: [{ text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.' }]
   }
-);
+)*/
 
 app.get('/check-time', async (req, res) => {
   try {

@@ -114,19 +114,24 @@ body {
     border-radius: 15px;
     animation: messageAppear 0.3s ease-out;
     position: relative;
-    padding-bottom: 25px; /* Espaço para o timestamp */
+    display: flex; /* Adicionado: Usa flexbox para o conteúdo e timestamp */
+    flex-direction: column; /* Adicionado: Empilha o conteúdo e o timestamp */
+    gap: 4px; /* Adicionado: Espaçamento entre o texto e o timestamp */
 }
 
-.message .message-timestamp { /* Classe corrigida para o timestamp */
-    font-size: 12px;
+.message .message-content {
+    /* Adicionado: Um wrapper para o texto principal, se precisar de estilização extra */
+    word-wrap: break-word; /* Garante que o texto quebre corretamente */
+}
+
+.message .message-timestamp {
+    font-size: 11px; /* Levemente menor para ser discreto */
     color: rgba(74, 20, 140, 0.6);
-    position: absolute;
-    bottom: 5px; /* Ajustado para ficar mais próximo da borda inferior */
-    right: 10px;
-    left: auto; /* Garante que o timestamp fique à direita */
+    align-self: flex-end; /* Adicionado: Alinha o timestamp à direita dentro do flex container */
     padding: 2px 5px;
-    border-radius: 10px;
-    background: rgba(74, 20, 140, 0.1);
+    border-radius: 8px; /* Borda levemente menor */
+    background: rgba(74, 20, 140, 0.08); /* Fundo um pouco mais sutil */
+    line-height: 1; /* Garante que a altura da linha seja mínima */
 }
 
 .user-message {
@@ -137,10 +142,10 @@ body {
 }
 
 .user-message .message-timestamp {
-    background: rgba(255, 255, 255, 0.2); /* Fundo mais claro para timestamp em user-message */
+    background: rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.8);
+    align-self: flex-end; /* Mantém à direita */
 }
-
 
 .bot-message {
     background: white;
@@ -150,8 +155,7 @@ body {
 }
 
 .bot-message .message-timestamp {
-    right: auto; /* Timestamp da mensagem do bot fica à esquerda */
-    left: 10px;
+    align-self: flex-start; /* Adicionado: Alinha o timestamp à esquerda para mensagens do bot */
 }
 
 .chat-input {
@@ -227,6 +231,9 @@ body {
     border-radius: 5px;
     margin: 10px 0;
     text-align: center;
+    display: flex; /* Adicionado */
+    flex-direction: column; /* Adicionado */
+    gap: 4px; /* Adicionado */
 }
 
 /* Responsividade */
@@ -495,7 +502,9 @@ body {
     padding: 12px 16px;
     border-radius: 15px;
     position: relative;
-    padding-bottom: 25px; /* Espaço para o timestamp */
+    display: flex; /* Adicionado: Usa flexbox */
+    flex-direction: column; /* Adicionado: Empilha conteúdo e timestamp */
+    gap: 4px; /* Adicionado: Espaçamento */
 }
 
 .session-message.user {
@@ -519,22 +528,21 @@ body {
 .session-message .message-time {
     font-size: 11px;
     color: rgba(74, 20, 140, 0.6);
-    position: absolute;
-    bottom: 5px;
-    right: 10px;
+    align-self: flex-end; /* Adicionado: Alinha o timestamp à direita para mensagens do bot no histórico */
     padding: 2px 5px;
     border-radius: 10px;
     background: rgba(74, 20, 140, 0.1);
+    line-height: 1;
 }
 
 .session-message.user .message-time {
     background: rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.8);
+    align-self: flex-end; /* Mantém à direita para user no histórico */
 }
 
 .session-message.bot .message-time {
-    left: 10px;
-    right: auto;
+    align-self: flex-start; /* Adicionado: Alinha o timestamp à esquerda para mensagens do bot no histórico */
 }
 
 .no-messages {

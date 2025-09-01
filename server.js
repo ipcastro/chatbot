@@ -440,7 +440,7 @@ app.get('/api/ranking/visualizar', (req, res) => {
 // Inicialização da API Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Troque para um modelo suportado pela sua conta/projeto:
-const modelName = 'gemini-1.5-flash';
+const modelName = 'gemini-2.5-flash';
 
 // Função para obter a hora atual - Garantindo o fuso horário brasileiro
 function getCurrentTime() {

@@ -10,7 +10,12 @@ require('dotenv').config();
 // Importar os modelos
 const SessaoChat = require('./models/SessaoChat');
 const Log = require('./models/Log');
-const Config = require('./models/Config');
+let Config = null;
+try {
+    Config = require('./models/Config');
+} catch (e) {
+    console.warn('[WARN] models/Config.js não encontrado. Usando fallback em memória/ENV para systemInstruction.');
+}
 
 // Configuração do servidor Express
 const app = express();
@@ -49,9 +54,13 @@ function requireAdmin(req, res, next) {
 }
 
 // Funções utilitárias para system instruction global
+let inMemorySystemInstruction = null;
 async function getGlobalSystemInstruction() {
-    const doc = await Config.findOne({ key: 'systemInstruction' });
-    return doc ? String(doc.value) : null;
+    if (Config) {
+        const doc = await Config.findOne({ key: 'systemInstruction' });
+        return doc ? String(doc.value) : (process.env.SYSTEM_INSTRUCTION_DEFAULT || inMemorySystemInstruction);
+    }
+    return process.env.SYSTEM_INSTRUCTION_DEFAULT || inMemorySystemInstruction;
 }
 
 async function setGlobalSystemInstruction(text) {
@@ -59,11 +68,15 @@ async function setGlobalSystemInstruction(text) {
         throw new Error('Instrução inválida.');
     }
     const value = text.trim();
-    await Config.findOneAndUpdate(
-        { key: 'systemInstruction' },
-        { key: 'systemInstruction', value },
-        { upsert: true, new: true }
-    );
+    if (Config) {
+        await Config.findOneAndUpdate(
+            { key: 'systemInstruction' },
+            { key: 'systemInstruction', value },
+            { upsert: true, new: true }
+        );
+    } else {
+        inMemorySystemInstruction = value;
+    }
     return value;
 }
 

@@ -10,6 +10,7 @@ require('dotenv').config();
 // Importar os modelos
 const SessaoChat = require('./models/SessaoChat');
 const Log = require('./models/Log');
+const Config = require('./models/Config');
 
 // Configuração do servidor Express
 const app = express();
@@ -25,6 +26,102 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Rota principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Middleware de autenticação para rotas de admin
+function requireAdmin(req, res, next) {
+    try {
+        const adminPassword = process.env.ADMIN_PASSWORD;
+        const authHeader = req.headers['authorization'] || '';
+        // Formato esperado: Authorization: Bearer <senha>
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+        if (!adminPassword) {
+            return res.status(500).json({ error: 'ADMIN_PASSWORD não configurada no servidor.' });
+        }
+        if (!token || token !== adminPassword) {
+            return res.status(403).json({ error: 'Acesso negado.' });
+        }
+        next();
+    } catch (e) {
+        return res.status(500).json({ error: 'Erro na verificação de admin.' });
+    }
+}
+
+// Funções utilitárias para system instruction global
+async function getGlobalSystemInstruction() {
+    const doc = await Config.findOne({ key: 'systemInstruction' });
+    return doc ? String(doc.value) : null;
+}
+
+async function setGlobalSystemInstruction(text) {
+    if (typeof text !== 'string' || text.trim().length === 0) {
+        throw new Error('Instrução inválida.');
+    }
+    const value = text.trim();
+    await Config.findOneAndUpdate(
+        { key: 'systemInstruction' },
+        { key: 'systemInstruction', value },
+        { upsert: true, new: true }
+    );
+    return value;
+}
+
+// Endpoints de Admin
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+    try {
+        const totalConversasPromise = SessaoChat.countDocuments({});
+        const ultimasConversasPromise = SessaoChat.find({})
+            .sort({ startTime: -1 })
+            .limit(5)
+            .select({ _id: 1, titulo: 1, startTime: 1, botId: 1 })
+            .exec();
+        const totalMensagensPromise = SessaoChat.aggregate([
+            { $unwind: '$messages' },
+            { $count: 'total' }
+        ]);
+
+        const [totalConversas, ultimasConversas, totalMensagensAgg] = await Promise.all([
+            totalConversasPromise,
+            ultimasConversasPromise,
+            totalMensagensPromise
+        ]);
+
+        const totalMensagens = totalMensagensAgg[0]?.total || 0;
+
+        res.json({
+            totalConversas,
+            totalMensagens,
+            ultimasConversas
+        });
+    } catch (error) {
+        console.error('[Admin] Erro em /api/admin/stats:', error);
+        res.status(500).json({ error: 'Erro ao obter estatísticas.' });
+    }
+});
+
+app.get('/api/admin/system-instruction', requireAdmin, async (req, res) => {
+    try {
+        const current = await getGlobalSystemInstruction();
+        res.json({ systemInstruction: current || '' });
+    } catch (error) {
+        console.error('[Admin] Erro ao obter system-instruction:', error);
+        res.status(500).json({ error: 'Erro ao obter instrução.' });
+    }
+});
+
+app.post('/api/admin/system-instruction', requireAdmin, async (req, res) => {
+    try {
+        const { systemInstruction: newInstruction } = req.body || {};
+        if (!newInstruction || typeof newInstruction !== 'string') {
+            return res.status(400).json({ error: 'systemInstruction (string) é obrigatório.' });
+        }
+        const saved = await setGlobalSystemInstruction(newInstruction);
+        res.json({ message: 'Instrução atualizada com sucesso.', systemInstruction: saved });
+    } catch (error) {
+        console.error('[Admin] Erro ao salvar system-instruction:', error);
+        res.status(500).json({ error: 'Erro ao salvar instrução.' });
+    }
 });
 
 // Conexão com MongoDB usando Mongoose
@@ -608,7 +705,7 @@ const functionDeclarations = [
   }
 ];
 
-const systemInstruction = `Você é o Chatbot Musical, um assistente virtual brasileiro especializado em música.
+let defaultSystemInstruction = `Você é o Chatbot Musical, um assistente virtual brasileiro especializado em música.
 IMPORTANTE: Você DEVE SEMPRE responder em português do Brasil, usando linguagem informal e amigável.
 Você deve responder principalmente sobre temas relacionados à música, mantendo um tom alegre e acolhedor.
 Você tem acesso às seguintes funções:
@@ -689,11 +786,15 @@ app.post('/chat', async (req, res) => {
       }
     }
 
+    // Recupera a system instruction global (persistente) ou usa a padrão
+    let systemInstructionToUse = await getGlobalSystemInstruction();
+    if (!systemInstructionToUse) systemInstructionToUse = defaultSystemInstruction;
+
     // Adiciona as instruções iniciais
     formattedHistory.unshift(
       {
         role: 'assistant',
-        parts: [{ text: systemInstruction }]
+        parts: [{ text: systemInstructionToUse }]
       },
       languageInstruction // Adiciona a instrução de idioma
     );

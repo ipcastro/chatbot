@@ -31,13 +31,20 @@
 			'Accept': 'application/json'
 		});
 		const res = await fetch(`${backendBase}${url}`, { ...options, headers });
-		if (res.status === 403) throw new Error('Acesso negado');
+		if (!res.ok) {
+			let serverMsg = '';
+			try {
+				const data = await res.json();
+				serverMsg = data?.error || data?.message || '';
+			} catch (_) { /* ignore parse errors */ }
+			if (res.status === 403) throw new Error(serverMsg || 'Acesso negado');
+			throw new Error(serverMsg || `Erro ${res.status}`);
+		}
 		return res;
 	}
 
 	async function carregarStats() {
 		const res = await fetchWithAuth('/api/admin/stats');
-		if (!res.ok) throw new Error('Falha ao obter estatísticas');
 		const data = await res.json();
 		totalConversas.textContent = data.totalConversas;
 		totalMensagens.textContent = data.totalMensagens;

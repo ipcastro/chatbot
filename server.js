@@ -33,22 +33,28 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Middleware de autenticação para rotas de admin
-function requireAdmin(req, res, next) {
+// Middleware de autenticação para rotas de admin (senha em Mongo com hash)
+const bcrypt = require('bcryptjs');
+async function fetchHashedAdminPassword() {
+    if (!Config) return null;
+    const doc = await Config.findOne({ key: 'adminPasswordHash' });
+    return doc?.value || null;
+}
+async function requireAdmin(req, res, next) {
     try {
-        const adminPassword = process.env.ADMIN_PASSWORD;
         const authHeader = req.headers['authorization'] || '';
-        // Formato esperado: Authorization: Bearer <senha>
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+        const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+        if (!provided) return res.status(403).json({ error: 'Acesso negado' });
 
-        if (!adminPassword) {
-            return res.status(500).json({ error: 'ADMIN_PASSWORD não configurada no servidor.' });
+        const storedHash = await fetchHashedAdminPassword();
+        if (!storedHash) {
+            return res.status(500).json({ error: 'Senha de admin não configurada no Mongo.' });
         }
-        if (!token || token !== adminPassword) {
-            return res.status(403).json({ error: 'Acesso negado.' });
-        }
+        const ok = await bcrypt.compare(provided, storedHash);
+        if (!ok) return res.status(403).json({ error: 'Acesso negado' });
         next();
     } catch (e) {
+        console.error('[AdminAuth] Erro:', e);
         return res.status(500).json({ error: 'Erro na verificação de admin.' });
     }
 }
@@ -134,6 +140,27 @@ app.post('/api/admin/system-instruction', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('[Admin] Erro ao salvar system-instruction:', error);
         res.status(500).json({ error: 'Erro ao salvar instrução.' });
+    }
+});
+
+// Endpoint para atualizar a senha de admin (requer senha atual)
+app.post('/api/admin/password', requireAdmin, async (req, res) => {
+    try {
+        if (!Config) return res.status(500).json({ error: 'Persistência indisponível.' });
+        const { newPassword } = req.body || {};
+        if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+            return res.status(400).json({ error: 'Nova senha inválida (mínimo 6 caracteres).' });
+        }
+        const hash = await bcrypt.hash(newPassword.trim(), 10);
+        await Config.findOneAndUpdate(
+            { key: 'adminPasswordHash' },
+            { key: 'adminPasswordHash', value: hash },
+            { upsert: true, new: true }
+        );
+        res.json({ message: 'Senha atualizada com sucesso.' });
+    } catch (error) {
+        console.error('[Admin] Erro ao atualizar senha:', error);
+        res.status(500).json({ error: 'Erro ao atualizar senha.' });
     }
 });
 

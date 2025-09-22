@@ -1,7 +1,7 @@
 (() => {
 	// Use a mesma base do backend já usada no projeto
 	const backendBase = 'https://chatbot-dny3.onrender.com';
-	let adminToken = '';
+	let adminCreds = { username: '', password: '' };
 
 	const el = (id) => document.getElementById(id);
 	const panel = el('panel');
@@ -21,12 +21,18 @@
 		panel.classList.toggle('hidden', !show);
 		document.getElementById('logout-btn').classList.toggle('hidden', !show);
 		document.getElementById('login-btn').classList.toggle('hidden', show);
+		document.getElementById('admin-user').disabled = show;
 		document.getElementById('admin-pass').disabled = show;
+	}
+
+	function toBasic(username, password) {
+		const raw = `${username}:${password}`;
+		return 'Basic ' + btoa(unescape(encodeURIComponent(raw)));
 	}
 
 	async function fetchWithAuth(url, options = {}) {
 		const headers = Object.assign({}, options.headers || {}, {
-			'Authorization': `Bearer ${adminToken}`,
+			'Authorization': toBasic(adminCreds.username, adminCreds.password),
 			'Content-Type': 'application/json',
 			'Accept': 'application/json'
 		});
@@ -81,23 +87,26 @@
 
 	// Eventos
 	document.getElementById('login-btn').addEventListener('click', async () => {
+		const user = document.getElementById('admin-user').value.trim();
 		const pass = document.getElementById('admin-pass').value.trim();
-		if (!pass) { setFeedback('Informe a senha.'); return; }
-		adminToken = pass;
+		if (!user || !pass) { setFeedback('Informe usuário e senha.'); return; }
+		adminCreds = { username: user, password: pass };
 		try {
+			// Checagem explícita de login
+			await fetchWithAuth('/api/admin/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
 			await carregarStats();
 			await carregarSystemInstruction();
 			showPanel(true);
 			setFeedback('Acesso concedido.', 'success');
 		} catch (e) {
-			adminToken = '';
+			adminCreds = { username: '', password: '' };
 			showPanel(false);
 			setFeedback(e.message || 'Falha na autenticação.');
 		}
 	});
 
 	document.getElementById('logout-btn').addEventListener('click', () => {
-		adminToken = '';
+		adminCreds = { username: '', password: '' };
 		showPanel(false);
 		setFeedback('Sessão encerrada.', 'success');
 	});

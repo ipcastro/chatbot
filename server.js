@@ -16,6 +16,12 @@ try {
 } catch (e) {
     console.warn('[WARN] models/Config.js não encontrado. Usando fallback em memória/ENV para systemInstruction.');
 }
+let AdminUser = null;
+try {
+    AdminUser = require('./models/AdminUser');
+} catch (e) {
+    console.warn('[WARN] models/AdminUser.js não encontrado.');
+}
 
 // Configuração do servidor Express
 const app = express();
@@ -35,22 +41,33 @@ app.get('/', (req, res) => {
 
 // Middleware de autenticação para rotas de admin (senha em Mongo com hash)
 const bcrypt = require('bcryptjs');
-async function fetchHashedAdminPassword() {
-    if (!Config) return null;
-    const doc = await Config.findOne({ key: 'adminPasswordHash' });
-    return doc?.value || null;
+function parseBasicAuth(header) {
+    const value = header || '';
+    if (!value.startsWith('Basic ')) return null;
+    const base64 = value.slice(6);
+    try {
+        const decoded = Buffer.from(base64, 'base64').toString('utf8');
+        const idx = decoded.indexOf(':');
+        if (idx === -1) return null;
+        const username = decoded.slice(0, idx);
+        const password = decoded.slice(idx + 1);
+        return { username, password };
+    } catch (_) { return null; }
 }
+
+async function verifyAdminUserPassword(username, password) {
+    if (!AdminUser) return false;
+    const user = await AdminUser.findOne({ username }).lean();
+    if (!user) return false;
+    return bcrypt.compare(password, user.passwordHash);
+}
+
 async function requireAdmin(req, res, next) {
     try {
         const authHeader = req.headers['authorization'] || '';
-        const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-        if (!provided) return res.status(403).json({ error: 'Acesso negado' });
-
-        const storedHash = await fetchHashedAdminPassword();
-        if (!storedHash) {
-            return res.status(500).json({ error: 'Senha de admin não configurada no Mongo.' });
-        }
-        const ok = await bcrypt.compare(provided, storedHash);
+        const basic = parseBasicAuth(authHeader);
+        if (!basic) return res.status(403).json({ error: 'Acesso negado' });
+        const ok = await verifyAdminUserPassword(basic.username, basic.password);
         if (!ok) return res.status(403).json({ error: 'Acesso negado' });
         next();
     } catch (e) {
@@ -146,15 +163,18 @@ app.post('/api/admin/system-instruction', requireAdmin, async (req, res) => {
 // Endpoint para atualizar a senha de admin (requer senha atual)
 app.post('/api/admin/password', requireAdmin, async (req, res) => {
     try {
-        if (!Config) return res.status(500).json({ error: 'Persistência indisponível.' });
-        const { newPassword } = req.body || {};
+        if (!AdminUser) return res.status(500).json({ error: 'Persistência indisponível.' });
+        const { username, newPassword } = req.body || {};
+        if (typeof username !== 'string' || !username.trim()) {
+            return res.status(400).json({ error: 'Usuário inválido.' });
+        }
         if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
             return res.status(400).json({ error: 'Nova senha inválida (mínimo 6 caracteres).' });
         }
         const hash = await bcrypt.hash(newPassword.trim(), 10);
-        await Config.findOneAndUpdate(
-            { key: 'adminPasswordHash' },
-            { key: 'adminPasswordHash', value: hash },
+        await AdminUser.findOneAndUpdate(
+            { username: username.trim() },
+            { username: username.trim(), passwordHash: hash },
             { upsert: true, new: true }
         );
         res.json({ message: 'Senha atualizada com sucesso.' });
@@ -167,34 +187,49 @@ app.post('/api/admin/password', requireAdmin, async (req, res) => {
 // Bootstrap: definir senha inicial de admin uma única vez usando token de implantação
 app.post('/api/admin/bootstrap-password', async (req, res) => {
     try {
-        if (!Config) return res.status(500).json({ error: 'Persistência indisponível.' });
+        if (!AdminUser) return res.status(500).json({ error: 'Persistência indisponível.' });
         const tokenHeader = req.headers['x-bootstrap-token'] || '';
         const expectedToken = process.env.ADMIN_BOOTSTRAP_TOKEN || '';
         if (!expectedToken) return res.status(500).json({ error: 'ADMIN_BOOTSTRAP_TOKEN não configurado.' });
         if (tokenHeader !== expectedToken) return res.status(403).json({ error: 'Token inválido.' });
 
-        // Impede reexecução se já houver senha configurada
-        const already = await Config.findOne({ key: 'adminPasswordHash' });
-        if (already && already.value) {
+        // Impede reexecução se já houver algum usuário admin
+        const existing = await AdminUser.findOne({}).lean();
+        if (existing) {
             return res.status(409).json({ error: 'Senha de admin já foi configurada.' });
         }
 
-        const { newPassword } = req.body || {};
+        const { username, newPassword } = req.body || {};
+        if (typeof username !== 'string' || !username.trim()) {
+            return res.status(400).json({ error: 'Usuário inválido.' });
+        }
         if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
             return res.status(400).json({ error: 'Nova senha inválida (mínimo 6 caracteres).' });
         }
 
         const hash = await bcrypt.hash(newPassword.trim(), 10);
-        await Config.findOneAndUpdate(
-            { key: 'adminPasswordHash' },
-            { key: 'adminPasswordHash', value: hash },
-            { upsert: true, new: true }
-        );
+        await AdminUser.create({ username: username.trim(), passwordHash: hash });
 
         res.json({ message: 'Senha inicial configurada com sucesso. Remova ADMIN_BOOTSTRAP_TOKEN do ambiente.' });
     } catch (error) {
         console.error('[Admin Bootstrap] Erro:', error);
         res.status(500).json({ error: 'Erro ao configurar senha inicial.' });
+    }
+});
+
+// Endpoint de login para checagem explícita (retorna 200/403)
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { username, password } = req.body || {};
+        if (typeof username !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Credenciais inválidas.' });
+        }
+        const ok = await verifyAdminUserPassword(username, password);
+        if (!ok) return res.status(403).json({ error: 'Acesso negado' });
+        res.json({ message: 'OK' });
+    } catch (e) {
+        console.error('[Admin Login] Erro:', e);
+        res.status(500).json({ error: 'Erro no login.' });
     }
 });
 

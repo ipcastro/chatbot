@@ -164,6 +164,40 @@ app.post('/api/admin/password', requireAdmin, async (req, res) => {
     }
 });
 
+// Bootstrap: definir senha inicial de admin uma única vez usando token de implantação
+app.post('/api/admin/bootstrap-password', async (req, res) => {
+    try {
+        if (!Config) return res.status(500).json({ error: 'Persistência indisponível.' });
+        const tokenHeader = req.headers['x-bootstrap-token'] || '';
+        const expectedToken = process.env.ADMIN_BOOTSTRAP_TOKEN || '';
+        if (!expectedToken) return res.status(500).json({ error: 'ADMIN_BOOTSTRAP_TOKEN não configurado.' });
+        if (tokenHeader !== expectedToken) return res.status(403).json({ error: 'Token inválido.' });
+
+        // Impede reexecução se já houver senha configurada
+        const already = await Config.findOne({ key: 'adminPasswordHash' });
+        if (already && already.value) {
+            return res.status(409).json({ error: 'Senha de admin já foi configurada.' });
+        }
+
+        const { newPassword } = req.body || {};
+        if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+            return res.status(400).json({ error: 'Nova senha inválida (mínimo 6 caracteres).' });
+        }
+
+        const hash = await bcrypt.hash(newPassword.trim(), 10);
+        await Config.findOneAndUpdate(
+            { key: 'adminPasswordHash' },
+            { key: 'adminPasswordHash', value: hash },
+            { upsert: true, new: true }
+        );
+
+        res.json({ message: 'Senha inicial configurada com sucesso. Remova ADMIN_BOOTSTRAP_TOKEN do ambiente.' });
+    } catch (error) {
+        console.error('[Admin Bootstrap] Erro:', error);
+        res.status(500).json({ error: 'Erro ao configurar senha inicial.' });
+    }
+});
+
 // Conexão com MongoDB usando Mongoose
 mongoose.connect(process.env.MONGO_HISTORIA)
     .then(() => {

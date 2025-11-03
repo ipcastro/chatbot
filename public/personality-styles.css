@@ -1,0 +1,60 @@
+.personality-section {
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.9);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.personality-section h2 {
+    font-size: 16px;
+    color: var(--text-color);
+    margin: 0;
+}
+
+.personality-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.personality-button {
+    background: var(--button-secondary-bg);
+    color: var(--text-color);
+    border: 2px solid transparent;
+    border-radius: 20px;
+    padding: 8px 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.personality-button:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.personality-button.active {
+    background: linear-gradient(45deg, var(--primary-color), var(--primary-light));
+    color: white;
+}
+
+.personality-button span {
+    font-size: 18px;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .personality-section {
+        padding: 10px;
+    }
+
+    .personality-button {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+}

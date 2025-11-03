@@ -5,13 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot Musical</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="history-modal.css"> <!-- Adicionado -->
+    <link rel="stylesheet" href="history-modal.css">
+    <link rel="stylesheet" href="personality-styles.css">
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
             <h1>Chatbot Musical</h1>
             <p>Seu guia musical virtual</p>
+        </div>
+        <div class="personality-section">
+            <h2>Escolha a personalidade do chatbot:</h2>
+            <div class="personality-options">
+                <button class="personality-button" data-personality="professor">
+                    <span>👨‍🏫</span> Professor de Música
+                </button>
+                <button class="personality-button" data-personality="dj">
+                    <span>🎧</span> DJ Animado
+                </button>
+                <button class="personality-button" data-personality="critico">
+                    <span>🎭</span> Crítico Musical
+                </button>
+                <button class="personality-button" data-personality="compositor">
+                    <span>🎼</span> Compositor
+                </button>
+                <button class="personality-button" data-personality="historiador">
+                    <span>📚</span> Historiador Musical
+                </button>
+            </div>
         </div>
         <div class="chat-messages" id="chat-messages">
             <!-- Mensagens serão inseridas aqui via JavaScript -->
@@ -48,7 +69,8 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
         </div>
     </div>
     
-    <!-- Script do cliente -->
+    <!-- Scripts -->
+    <script src="personalities.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

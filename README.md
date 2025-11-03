@@ -48,3 +48,15 @@ O chatbot está configurado com os seguintes parâmetros:
 ## Licença
 
 ISC 
+
+## Plano de Melhorias Baseado em Dados
+
+Após adicionar o Painel de Guerra (dashboard) no admin, você terá métricas acionáveis. Abaixo estão duas ações concretas que podem ser tomadas com base nas novas métricas:
+
+1) Reduzir respostas inconclusivas sobre temas específicos
+- Observação: Se o widget "Análise de Falhas" mostrar uma concentração de falhas sobre um tema (ex: preços, disponibilidade de produto), atualizar a `systemInstruction` para incluir guias de resposta ou roteiros sobre esse tema, ou adicionar dados complementares (FAQ) que o bot possa consultar.
+
+2) Melhorar engajamento para conversas curtas
+- Observação: Se a "Duração Média" for baixa e muitas conversas forem curtíssimas (≤3 mensagens), considere ajustar a abertura do bot (prompts iniciais) para sugerir tópicos ou opções (ex: "Posso procurar uma música, dar recomendações ou mostrar as últimas tendências — o que prefere?"). Teste variações A/B na `systemInstruction` para mensurar impacto.
+
+Essas são sugestões iniciais — o ciclo ideal é: medir (dashboard), agir (ajustes na instrução ou fluxos), e reavaliar (verificar métricas após deploy).

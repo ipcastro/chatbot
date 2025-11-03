@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Configurações - Personalidade do Bot</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;background:#f5f7fb;color:#222;padding:20px}
+    .card{background:#fff;padding:16px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,0.08);max-width:900px;margin:0 auto}
+    textarea{width:100%;min-height:160px;padding:8px;border-radius:6px;border:1px solid #ddd}
+    .row{display:flex;gap:8px;margin:8px 0}
+    .small{font-size:13px;color:#666}
+    button{padding:10px 14px;border-radius:6px;border:0;background:#2e62ff;color:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Personalidade do seu Bot</h2>
+    <p class="small">Aqui você pode definir uma instrução de sistema personalizada para o seu bot. Ela terá prioridade sobre a configuração global.</p>
+
+    <div class="row">
+      <input id="cfg-username" placeholder="Usuário" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px" />
+      <input id="cfg-password" placeholder="Senha" type="password" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px" />
+    </div>
+
+    <label for="systemInstruction"><strong>Instrução de Sistema (personality)</strong></label>
+    <textarea id="systemInstruction" placeholder="Ex: Você é um chef de cozinha e responde apenas em receitas..."></textarea>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="btn-save">Salvar Personalidade</button>
+      <button id="btn-load" style="background:#4caf50">Carregar atual</button>
+      <div id="msg" class="small" style="align-self:center"></div>
+    </div>
+
+    <hr style="margin:14px 0">
+    <h4>Como testar</h4>
+    <ol class="small">
+      <li>Crie um usuário via endpoint protegido <code>/api/user/register</code> (use token ADMIN_BOOTSTRAP_TOKEN no header).</li>
+      <li>Preencha Usuário/Senha acima e clique em "Carregar atual" para ver a instrução salva.</li>
+      <li>Edite e clique em "Salvar Personalidade". Depois envie mensagens para <code>/chat</code> usando as mesmas credenciais (Basic Auth) para validar.</li>
+    </ol>
+  </div>
+
+  <script src="/configuracoes.js"></script>
+</body>
+</html>

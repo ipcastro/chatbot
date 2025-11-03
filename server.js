@@ -22,6 +22,12 @@ try {
 } catch (e) {
     console.warn('[WARN] models/AdminUser.js não encontrado.');
 }
+let User = null;
+try {
+  User = require('./models/User');
+} catch (e) {
+  console.warn('[WARN] models/User.js não encontrado. User-level auth endpoints ficarão indisponíveis.');
+}
 
 // Configuração do servidor Express
 const app = express();
@@ -84,6 +90,53 @@ async function getGlobalSystemInstruction() {
         return doc ? String(doc.value) : (process.env.SYSTEM_INSTRUCTION_DEFAULT || inMemorySystemInstruction);
     }
     return process.env.SYSTEM_INSTRUCTION_DEFAULT || inMemorySystemInstruction;
+}
+
+// Verifica credenciais de usuário comum (não-admin)
+async function verifyUserPassword(username, password) {
+  if (!User) return false;
+  const user = await User.findOne({ username }).lean();
+  if (!user) return false;
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  return ok ? user : false;
+}
+
+// Middleware que tenta extrair usuário via Basic Auth (opcional)
+async function optionalUserFromAuth(req, res, next) {
+  try {
+    if (!User) return next();
+    const authHeader = req.headers['authorization'] || '';
+    const basic = parseBasicAuth(authHeader);
+    if (!basic) return next();
+    const user = await User.findOne({ username: basic.username }).lean();
+    if (!user) return next();
+    const ok = await bcrypt.compare(basic.password, user.passwordHash);
+    if (!ok) return next();
+    req.currentUser = user; // attach user document (lean)
+    return next();
+  } catch (e) {
+    console.error('[optionalUserFromAuth] Erro:', e);
+    return next();
+  }
+}
+
+// Middleware que exige usuário autenticado (para endpoints de preferências)
+async function requireUser(req, res, next) {
+  try {
+    if (!User) return res.status(500).json({ error: 'Persistência de usuário indisponível.' });
+    const authHeader = req.headers['authorization'] || '';
+    const basic = parseBasicAuth(authHeader);
+    if (!basic) return res.status(403).json({ error: 'Acesso negado' });
+    const user = await User.findOne({ username: basic.username }).exec();
+    if (!user) return res.status(403).json({ error: 'Acesso negado' });
+    const ok = await bcrypt.compare(basic.password, user.passwordHash);
+    if (!ok) return res.status(403).json({ error: 'Acesso negado' });
+    req.currentUser = user;
+    next();
+  } catch (e) {
+    console.error('[requireUser] Erro:', e);
+    res.status(500).json({ error: 'Erro na verificação do usuário.' });
+  }
 }
 
 async function setGlobalSystemInstruction(text) {
@@ -158,6 +211,32 @@ app.post('/api/admin/system-instruction', requireAdmin, async (req, res) => {
         console.error('[Admin] Erro ao salvar system-instruction:', error);
         res.status(500).json({ error: 'Erro ao salvar instrução.' });
     }
+});
+
+// Endpoints para preferências do usuário (personalidade)
+// GET retorna a instrução de sistema personalizada do usuário autenticado
+app.get('/api/user/preferences', requireUser, async (req, res) => {
+  try {
+    const user = req.currentUser;
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    res.json({ systemInstruction: user.systemInstruction || '' });
+  } catch (error) {
+    console.error('[User Prefs] Erro ao obter preferências do usuário:', error);
+    res.status(500).json({ error: 'Erro ao obter preferências.' });
+  }
+});
+
+// PUT atualiza a instrução de sistema personalizada do usuário autenticado
+app.put('/api/user/preferences', requireUser, async (req, res) => {
+  try {
+    const { systemInstruction } = req.body || {};
+    if (typeof systemInstruction !== 'string') return res.status(400).json({ error: 'systemInstruction (string) é obrigatório.' });
+    const updated = await User.findByIdAndUpdate(req.currentUser._id, { systemInstruction: systemInstruction.trim() }, { new: true }).lean().exec();
+    res.json({ message: 'Personalidade salva com sucesso.', systemInstruction: updated.systemInstruction || '' });
+  } catch (error) {
+    console.error('[User Prefs] Erro ao salvar preferências do usuário:', error);
+    res.status(500).json({ error: 'Erro ao salvar preferências.' });
+  }
 });
 
 // Endpoint para atualizar a senha de admin (requer senha atual)
@@ -251,7 +330,7 @@ mongoose.connect(process.env.MONGO_HISTORIA)
 
 let dadosRankingVitrine = [];
 
-app.post('/chat', async (req, res) => {
+app.post('/chat', optionalUserFromAuth, async (req, res) => {
   try {
     const { message, history = [] } = req.body;
     console.log("\n--- Nova Mensagem ---");
@@ -393,9 +472,9 @@ app.post('/chat', async (req, res) => {
       },
     });
 
-    // Força o modelo a responder em português
+    // Força o modelo a responder em português (usar role 'system' para maior prioridade)
     const languageInstruction = {
-      role: 'user',
+      role: 'system',
       parts: [{ text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.' }]
     };
 
@@ -860,212 +939,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.post('/chat', async (req, res) => {
-  try {
-    const { message, history = [] } = req.body; // Garante que history seja um array
-    console.log("\n--- Nova Mensagem ---");
-    // console.log("Histórico recebido:", JSON.stringify(history, null, 2));
-    console.log("Mensagem do usuário:", message);
-
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      tools: [{
-        functionDeclarations: functionDeclarations
-      }],
-      generation_config: { temperature: 0.7 },
-    });
-
-    // Formata o histórico para o formato correto
-    const formattedHistory = [];
-    if (history && history.length > 0) {
-      for (const msg of history) {
-        try {
-          const text = typeof msg === 'string' ? msg : 
-                      msg.message || msg.text || 
-                      (msg.parts && msg.parts[0] && msg.parts[0].text) || 
-                      JSON.stringify(msg);
-
-          formattedHistory.push({
-            role: msg.isUser ? 'user' : 'model',
-            parts: [{ text }]
-          });
-        } catch (error) {
-          console.error('Erro ao formatar mensagem do histórico:', error);
-        }
-      }
-    }
-
-    // Recupera a system instruction global (persistente) ou usa a padrão
-    let systemInstructionToUse = await getGlobalSystemInstruction();
-    if (!systemInstructionToUse) systemInstructionToUse = defaultSystemInstruction;
-
-    // Adiciona as instruções iniciais
-    formattedHistory.unshift(
-      {
-        role: 'assistant',
-        parts: [{ text: systemInstructionToUse }]
-      },
-      languageInstruction // Adiciona a instrução de idioma
-    );
-
-    console.log('Histórico formatado:', JSON.stringify(formattedHistory, null, 2));
-
-    // Inicia o chat com o histórico formatado
-    const chat = model.startChat({
-      history: formattedHistory,
-      generationConfig: { 
-        temperature: 0.7,
-        topP: 0.8,
-        topK: 40
-      }
-    });
-    
-    let currentApiRequestContents = message; // Envia a mensagem atual
-    let modelResponse; // Para armazenar a resposta do modelo (`GenerateContentResponse`)
-    let loopCount = 0;
-    const MAX_FUNCTION_CALL_LOOPS = 5;
-
-    while (loopCount < MAX_FUNCTION_CALL_LOOPS) {
-      loopCount++;
-      console.log(`Loop ${loopCount}, enviando para o modelo (primeira parte):`, JSON.stringify(currentApiRequestContents[0]).substring(0, 200) + "...");
-
-      // `sendMessage` espera um `string` ou `Part[]` ou `GenerateContentRequest`
-      // Se `currentApiRequestContents` for um array de `FunctionResponsePart`, está correto.
-      // Se for a primeira mensagem do usuário, `message` (string) é usado.
-      let result;
-      try {
-        if (loopCount === 1) {
-          // Na primeira iteração, envie apenas a mensagem do usuário como string
-          result = await chat.sendMessage(message);
-        } else {
-          // Para as chamadas de função, converte o array em uma string JSON
-          const functionResponseStr = JSON.stringify(currentApiRequestContents);
-          result = await chat.sendMessage(functionResponseStr);
-        }
-      } catch (sendError) {
-        console.error(`Erro ao enviar mensagem (loop ${loopCount}):`, sendError);
-        throw sendError;
-      }
-      
-      modelResponse = result.response; // `modelResponse` é `GenerateContentResponse`
-
-      if (!modelResponse) {
-          console.error("PANIC: result.response (modelResponse) está undefined ou null. Conteúdo de result:", JSON.stringify(result, null, 2));
-          const historySoFar = await chat.getHistory();
-          const lastModelPart = historySoFar.filter(h => h.role === 'model').pop();
-          const fallbackText = lastModelPart ? lastModelPart.parts.map(p => p.text || "").join('') : "Não consegui processar a resposta devido a um erro interno.";
-          return res.json({ response: fallbackText, history: historySoFar });
-      }
-      
-      // Log para depuração
-      // console.log("Conteúdo de modelResponse (result.response):", JSON.stringify(modelResponse, null, 2));
-
-      // Verifica se functionCalls existe e é uma função
-      if (typeof modelResponse.functionCalls !== 'function') {
-        console.log("modelResponse.functionCalls não é uma função. A resposta atual é provavelmente texto.");
-        // console.log("Estrutura de modelResponse para depuração:", JSON.stringify(modelResponse, null, 2));
-        break; // Sai do loop, pois não há (mais) chamadas de função ou o método não existe.
-      }
-
-      const functionCallRequests = modelResponse.functionCalls(); // Isto retorna FunctionCall[] | undefined
-
-      if (!functionCallRequests || functionCallRequests.length === 0) {
-        console.log("Nenhuma chamada de função pendente nesta resposta.");
-        break; // Sai do loop se não houver chamadas de função
-      }
-
-      console.log(`Chamadas de função requisitadas pelo modelo (${functionCallRequests.length}):`, JSON.stringify(functionCallRequests, null, 2));
-
-      const functionExecutionResponses = [];
-      for (const call of functionCallRequests) { // `call` aqui é um objeto FunctionCall {name, args}
-        const functionToCall = availableFunctions[call.name];
-        if (functionToCall) {
-          try {
-            console.log(`Executando função: ${call.name} com args:`, call.args);
-            const functionResultData = await functionToCall(call.args);
-            console.log(`Resultado da função ${call.name}:`, functionResultData);
-            functionExecutionResponses.push({ // Esta é a estrutura de FunctionResponsePart
-              functionResponse: {
-                name: call.name,
-                response: functionResultData,
-              },
-            });
-          } catch (error) {
-            console.error(`Erro ao executar função ${call.name}:`, error);
-            functionExecutionResponses.push({
-              functionResponse: {
-                name: call.name,
-                response: { error: `Erro interno ao executar a função: ${error.message}` },
-              },
-            });
-          }
-        } else {
-          console.error(`Função ${call.name} não implementada`);
-          functionExecutionResponses.push({
-            functionResponse: {
-              name: call.name,
-              response: { error: "Função não implementada no servidor." },
-            },
-          });
-        }
-      }
-
-      if (functionExecutionResponses.length > 0) {
-        console.log("Enviando respostas das funções para o modelo:", JSON.stringify(functionExecutionResponses, null, 2).substring(0,200) + "...");
-        currentApiRequestContents = functionExecutionResponses; // Prepara para a próxima chamada ao sendMessage
-      } else {
-        console.log("Nenhuma resposta de função processada (isso não deveria acontecer se functionCallRequests existia), saindo do loop.");
-        break;
-      }
-    } // Fim do while
-
-    if (loopCount >= MAX_FUNCTION_CALL_LOOPS) {
-        console.warn("Loop de chamadas de função atingiu o limite máximo.");
-    }
-
-    let responseText = "";
-    if (modelResponse && typeof modelResponse.text === 'function') {
-        responseText = modelResponse.text();
-    } else if (modelResponse && modelResponse.candidates && modelResponse.candidates[0]?.content?.parts) {
-        responseText = modelResponse.candidates[0].content.parts.map(part => part.text || "").join("");
-    } else {
-        console.error("Não foi possível obter texto final de modelResponse. Estrutura de modelResponse:", JSON.stringify(modelResponse, null, 2));
-        responseText = "Desculpe, tive um problema ao gerar a resposta final.";
-    }
-
-    console.log("Resposta final do modelo para o usuário:", responseText);
-
-    const updatedHistory = await chat.getHistory();
-    // console.log("Histórico atualizado para enviar ao cliente:", JSON.stringify(updatedHistory, null, 2));
-
-    res.json({
-      response: responseText,
-      history: updatedHistory,
-    });
-
-  } catch (error) {
-    console.error("Erro GERAL no processamento do chat:", error);
-    console.error("Stack do erro:", error.stack);
-    if (error.message && error.message.includes('API key not valid')) {
-         res.status(401).json({
-            response: "Desculpe, ocorreu um erro de autenticação com a API de IA. Verifique a chave da API.",
-            error: error.message
-        });
-    } else if (error.response && error.response.data) { // Erros de Axios ou outras APIs
-        res.status(500).json({
-            response: "Desculpe, ocorreu um erro ao se comunicar com um serviço externo.",
-            error: error.response.data
-        });
-    }
-    else {
-        res.status(500).json({
-          response: "Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.",
-          error: error.message || "Erro desconhecido",
-        });
-    }
-  }
-});
-
 async function registrarAcessoBotParaRanking(botId, nomeBot) {
     const dataRanking = {
         botId: botId,
@@ -1250,6 +1123,98 @@ app.get('/api/chat/historicos', async (req, res) => {
         console.error("[Servidor] Erro ao buscar históricos:", error);
         res.status(500).json({ error: "Erro interno ao buscar históricos de chat." });
     }
+});
+
+// Endpoint administrativo que agrega métricas para o dashboard
+app.get('/api/admin/dashboard', async (req, res) => {
+  try {
+    // Palavras-chave indicativas de respostas fracas/inconclusivas do bot
+    const failureKeywords = [
+      'não entendi',
+      'não posso ajudar',
+      'não sei',
+      'não tenho acesso',
+      'desculpe',
+      'não consigo',
+      'pode reformular',
+      'not sure',
+      'i don\'t know'
+    ];
+
+    // 1) Profundidade de Engajamento: média de mensagens + contagem curt/long
+    const engagementAgg = await SessaoChat.aggregate([
+      { $project: { numeroDeMensagens: { $size: { $ifNull: ['$messages', []] } }, userId: 1 } },
+      { $group: {
+        _id: null,
+        duracaoMedia: { $avg: '$numeroDeMensagens' },
+        totalConversas: { $sum: 1 },
+        conversasCurtas: { $sum: { $cond: [ { $lte: ['$numeroDeMensagens', 3] }, 1, 0 ] } },
+        conversasLongas: { $sum: { $cond: [ { $gt: ['$numeroDeMensagens', 3] }, 1, 0 ] } }
+      } }
+    ]).exec();
+
+    const engagement = (engagementAgg && engagementAgg[0]) ? engagementAgg[0] : { duracaoMedia: 0, totalConversas: 0, conversasCurtas: 0, conversasLongas: 0 };
+
+    // 2) Lealdade do Usuário: Top 5 usuários por número de sessões
+    const topUsuarios = await SessaoChat.aggregate([
+      { $group: { _id: '$userId', total: { $sum: 1 } } },
+      { $sort: { total: -1 } },
+      { $limit: 5 }
+    ]).exec();
+
+    // 3) Análise de Falhas: buscar trechos recentes onde o bot usou frases de falha
+    // Vamos buscar nas últimas 200 sessões para produtividade
+    const recentSessions = await SessaoChat.find({}).sort({ startTime: -1 }).limit(200).lean().exec();
+
+    const conversasComFalha = [];
+    for (const sessao of recentSessions) {
+      if (!sessao.messages || !Array.isArray(sessao.messages)) continue;
+
+      for (let i = 0; i < sessao.messages.length; i++) {
+        const msg = sessao.messages[i];
+        if (msg.role === 'model') {
+          const text = (msg.parts && msg.parts[0] && msg.parts[0].text) ? String(msg.parts[0].text).toLowerCase() : '';
+          if (failureKeywords.some(k => text.includes(k))) {
+            // Tentar encontrar a última pergunta do usuário antes desta resposta
+            let perguntaUsuario = '';
+            for (let j = i - 1; j >= 0; j--) {
+              if (sessao.messages[j].role === 'user') {
+                perguntaUsuario = sessao.messages[j].parts?.[0]?.text || '';
+                break;
+              }
+            }
+
+            conversasComFalha.push({
+              sessionId: sessao._id,
+              sessionTitle: sessao.titulo || null,
+              userId: sessao.userId || 'anonimo',
+              pergunta: perguntaUsuario || null,
+              resposta: msg.parts?.[0]?.text || null,
+              timestamp: msg.timestamp || sessao.startTime
+            });
+
+            // limitar o tamanho do array para não sobrecarregar a resposta
+            if (conversasComFalha.length >= 20) break;
+          }
+        }
+      }
+
+      if (conversasComFalha.length >= 20) break;
+    }
+
+    res.json({
+      duracaoMedia: Math.round((engagement.duracaoMedia || 0) * 100) / 100,
+      totalConversas: engagement.totalConversas || 0,
+      conversasCurtas: engagement.conversasCurtas || 0,
+      conversasLongas: engagement.conversasLongas || 0,
+      topUsuarios: topUsuarios.map(u => ({ userId: u._id || 'anonimo', conversas: u.total })),
+      conversasComFalha
+    });
+
+  } catch (error) {
+    console.error('[ADMIN DASHBOARD] Erro ao gerar dashboard:', error);
+    res.status(500).json({ error: 'Erro interno ao gerar dashboard.' });
+  }
 });
 
 // Rota de teste

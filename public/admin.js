@@ -9,6 +9,12 @@
 	const totalConversas = el('total-conversas');
 	const totalMensagens = el('total-mensagens');
 	const ultimasList = el('ultimas-list');
+	const duracaoMediaEl = el('duracao-media');
+	const conversasCurtasEl = el('conversas-curtas');
+	const conversasLongasEl = el('conversas-longas');
+	const topUsuariosEl = el('top-usuarios');
+	const failCountEl = el('fail-count');
+	const failListEl = el('fail-list');
 	const systemInstruction = el('system-instruction');
 	const saveStatus = el('save-status');
 
@@ -64,6 +70,42 @@
 		});
 	}
 
+	async function carregarDashboard() {
+		try {
+			const res = await fetchWithAuth('/api/admin/dashboard');
+			const data = await res.json();
+
+			duracaoMediaEl.textContent = data.duracaoMedia ?? '-';
+			conversasCurtasEl.textContent = data.conversasCurtas ?? 0;
+			conversasLongasEl.textContent = data.conversasLongas ?? 0;
+
+			// Top usuarios
+			topUsuariosEl.innerHTML = '';
+			if (Array.isArray(data.topUsuarios) && data.topUsuarios.length > 0) {
+				data.topUsuarios.forEach(u => {
+					const li = document.createElement('li');
+					li.textContent = `${u.userId} — ${u.conversas} conversas`;
+					topUsuariosEl.appendChild(li);
+				});
+			} else {
+				topUsuariosEl.innerHTML = '<li>Nenhum dado</li>';
+			}
+
+			// Falhas
+			failCountEl.textContent = (data.conversasComFalha || []).length;
+			failListEl.innerHTML = '';
+			(data.conversasComFalha || []).forEach(item => {
+				const d = document.createElement('div');
+				d.className = 'item fail-snippet';
+				d.innerHTML = `<strong>${item.sessionTitle || item.sessionId}</strong><br><div><em>Pergunta:</em> ${item.pergunta || '—'}</div><div><em>Resposta do bot:</em> ${item.resposta || '—'}</div>`;
+				failListEl.appendChild(d);
+			});
+
+		} catch (e) {
+			console.error('Erro ao carregar dashboard:', e);
+		}
+	}
+
 	async function carregarSystemInstruction() {
 		const res = await fetchWithAuth('/api/admin/system-instruction');
 		if (!res.ok) throw new Error('Falha ao obter instrução');
@@ -96,6 +138,8 @@
 			await fetchWithAuth('/api/admin/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
 			await carregarStats();
 			await carregarSystemInstruction();
+			// Carrega também o dashboard com métricas mais ricas
+			await carregarDashboard();
 			showPanel(true);
 			setFeedback('Acesso concedido.', 'success');
 		} catch (e) {

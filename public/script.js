@@ -438,7 +438,8 @@ async function sendMessage() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                ...getBasicAuthHeader() // Adiciona o header de autenticação se houver
             },
             body: JSON.stringify(requestBody)
         });

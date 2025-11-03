@@ -434,12 +434,17 @@ async function sendMessage() {
 
         console.log('Enviando para o servidor:', JSON.stringify(requestBody, null, 2));
 
+        // Adiciona a instrução da personalidade selecionada ao requestBody
+        const selectedPersonality = localStorage.getItem('selectedPersonality');
+        if (selectedPersonality && personalities[selectedPersonality]) {
+            requestBody.systemInstruction = personalities[selectedPersonality].instruction;
+        }
+
         const response = await fetch(`${backendUrl}/chat`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                ...getBasicAuthHeader() // Adiciona o header de autenticação se houver
+                'Accept': 'application/json'
             },
             body: JSON.stringify(requestBody)
         });

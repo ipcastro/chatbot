@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="history-modal.css">
     <link rel="stylesheet" href="personality-styles.css">
-    <link rel="stylesheet" href="login-modal.css">
 </head>
 <body>
     <div class="chat-container">
@@ -33,30 +32,6 @@
                 <button class="personality-button" data-personality="historiador">
                     <span>📚</span> Historiador Musical
                 </button>
-            </div>
-            <p class="login-status" style="text-align: center; margin-top: 10px; font-size: 0.9em;">
-                <a href="#" id="loginLink" style="color: var(--primary-color); text-decoration: none;">
-                    Faça login para salvar suas preferências
-                </a>
-            </p>
-        </div>
-
-        <!-- Modal de Login -->
-        <div id="loginModal" class="login-modal">
-            <div class="login-content">
-                <div class="login-header">
-                    <h2>Login</h2>
-                    <p>Entre para personalizar seu chatbot</p>
-                </div>
-                <form id="loginForm" class="login-form">
-                    <input type="text" id="username" placeholder="Nome de usuário" required>
-                    <input type="password" id="password" placeholder="Senha" required>
-                    <div class="login-buttons">
-                        <button type="button" class="btn-cancel" id="cancelLogin">Cancelar</button>
-                        <button type="submit" class="btn-login">Entrar</button>
-                    </div>
-                    <div class="login-error" id="loginError"></div>
-                </form>
             </div>
         </div>
         <div class="chat-messages" id="chat-messages">

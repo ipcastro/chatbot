@@ -1,121 +1,4 @@
-// Auth Token e Gerenciamento de Sessão
-let authToken = null;
-
-// Funções de autenticação
-function getAuthToken() {
-    return authToken;
-}
-
-function setAuthToken(token) {
-    authToken = token;
-    if (token) {
-        localStorage.setItem('chatAuthToken', token);
-    } else {
-        localStorage.removeItem('chatAuthToken');
-    }
-    updateLoginStatus();
-}
-
-function getBasicAuthHeader() {
-    const token = getAuthToken();
-    return token ? { 'Authorization': `Basic ${token}` } : {};
-}
-
-function updateLoginStatus() {
-    const loginLink = document.getElementById('loginLink');
-    if (loginLink) {
-        if (getAuthToken()) {
-            loginLink.textContent = 'Você está logado ✓';
-            loginLink.style.cursor = 'default';
-            loginLink.onclick = (e) => {
-                e.preventDefault();
-                if (confirm('Deseja sair?')) {
-                    logout();
-                }
-            };
-        } else {
-            loginLink.textContent = 'Faça login para salvar suas preferências';
-            loginLink.style.cursor = 'pointer';
-            loginLink.onclick = (e) => {
-                e.preventDefault();
-                showLoginModal();
-            };
-        }
-    }
-}
-
-function showLoginModal() {
-    const modal = document.getElementById('loginModal');
-    const form = document.getElementById('loginForm');
-    const cancelBtn = document.getElementById('cancelLogin');
-    const errorDiv = document.getElementById('loginError');
-
-    modal.style.display = 'flex';
-    form.reset();
-    errorDiv.style.display = 'none';
-
-    // Event listeners
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        await handleLogin();
-    };
-
-    cancelBtn.onclick = () => {
-        modal.style.display = 'none';
-    };
-
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-}
-
-async function handleLogin() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('loginError');
-    const modal = document.getElementById('loginModal');
-
-    try {
-        // Criar o token Basic Auth
-        const token = btoa(`${username}:${password}`);
-        
-        // Testar o login fazendo uma requisição para o endpoint de preferências
-        const response = await fetch('/api/user/preferences', {
-            headers: {
-                'Authorization': `Basic ${token}`
-            }
-        });
-
-        if (response.ok) {
-            // Login bem sucedido
-            setAuthToken(token);
-            modal.style.display = 'none';
-            showToast('Login realizado com sucesso!');
-        } else {
-            throw new Error('Credenciais inválidas');
-        }
-    } catch (error) {
-        console.error('Erro no login:', error);
-        errorDiv.textContent = 'Usuário ou senha incorretos';
-        errorDiv.style.display = 'block';
-    }
-}
-
-function logout() {
-    setAuthToken(null);
-    showToast('Logout realizado com sucesso');
-}
-
-// Tentar restaurar a sessão no carregamento
-document.addEventListener('DOMContentLoaded', () => {
-    const savedToken = localStorage.getItem('chatAuthToken');
-    if (savedToken) {
-        setAuthToken(savedToken);
-    }
-    updateLoginStatus();
-});
+// Estado atual e definições das personalidades
 
 // Definições das personalidades
 const personalities = {
@@ -152,26 +35,8 @@ let currentPersonality = null;
 // Função para atualizar a personalidade do chatbot
 async function updatePersonality(personality) {
     try {
-        // Se não estiver logado, mostrar modal de login
-        if (!getAuthToken()) {
-            showLoginModal();
-            return;
-        }
-
-        const response = await fetch('/api/user/preferences', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                ...getBasicAuthHeader()
-            },
-            body: JSON.stringify({
-                systemInstruction: personalities[personality].instruction
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Não foi possível atualizar a personalidade');
-        }
+        // Armazena a personalidade no localStorage para persistência
+        localStorage.setItem('selectedPersonality', personality);
 
         // Atualiza o estado local
         currentPersonality = personality;
@@ -194,11 +59,7 @@ async function updatePersonality(personality) {
 
     } catch (error) {
         console.error('Erro ao atualizar personalidade:', error);
-        if (error.message.includes('403')) {
-            showLoginModal();
-        } else {
-            showError('Não foi possível alterar a personalidade. Por favor, tente novamente.');
-        }
+        showError('Não foi possível alterar a personalidade. Por favor, tente novamente.');
     }
 }
 

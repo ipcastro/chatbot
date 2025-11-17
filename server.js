@@ -239,14 +239,10 @@ app.put('/api/user/preferences', requireUser, async (req, res) => {
   }
 });
 
-// Endpoint protegido para registrar usuários comuns
+// Endpoint público para registrar usuários comuns
 app.post('/api/user/register', async (req, res) => {
   try {
     if (!User) return res.status(500).json({ error: 'Persistência de usuário indisponível.' });
-    const tokenHeader = req.headers['x-bootstrap-token'] || '';
-    const expectedToken = process.env.ADMIN_BOOTSTRAP_TOKEN || '';
-    if (!expectedToken) return res.status(500).json({ error: 'ADMIN_BOOTSTRAP_TOKEN não configurado.' });
-    if (tokenHeader !== expectedToken) return res.status(403).json({ error: 'Token inválido.' });
 
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || !username.trim()) {
@@ -1008,7 +1004,7 @@ async function registrarAcessoBotParaRanking(botId, nomeBot) {
     });
 }
 
-app.post('/api/chat/salvar-historico', async (req, res) => {
+app.post('/api/chat/salvar-historico', optionalUserFromAuth, async (req, res) => {
     try {
         const { sessionId, userId, botId, startTime, endTime, messages } = req.body;
 
@@ -1026,7 +1022,7 @@ app.post('/api/chat/salvar-historico', async (req, res) => {
 
         const novaSessao = new SessaoChat({
             sessionId,
-            userId: userId || 'anonimo',
+            userId: req.currentUser?.username || userId || 'anonimo',
             botId: botId || 'IFCODE SuperBot',
             startTime: startTime ? new Date(startTime) : new Date(),
             endTime: endTime ? new Date(endTime) : new Date(),
@@ -1178,6 +1174,59 @@ app.get('/api/chat/historicos', async (req, res) => {
     } catch (error) {
         console.error("[Servidor] Erro ao buscar históricos:", error);
         res.status(500).json({ error: "Erro interno ao buscar históricos de chat." });
+    }
+});
+
+// Endpoints de histórico específicos do usuário autenticado
+app.get('/api/user/history', requireUser, async (req, res) => {
+    try {
+        const username = req.currentUser.username;
+        const historicos = await SessaoChat.find({ userId: username })
+            .sort({ startTime: -1 })
+            .limit(20)
+            .exec();
+        res.json(historicos);
+    } catch (error) {
+        console.error("[User History] Erro ao buscar históricos:", error);
+        res.status(500).json({ error: "Erro interno ao buscar históricos do usuário." });
+    }
+});
+
+app.delete('/api/user/history/:id', requireUser, async (req, res) => {
+    try {
+        const username = req.currentUser.username;
+        const result = await SessaoChat.findOneAndDelete({ _id: req.params.id, userId: username });
+        if (!result) {
+            return res.status(404).json({ error: "Histórico não encontrado." });
+        }
+        res.json({ message: "Histórico excluído com sucesso." });
+    } catch (error) {
+        console.error("[User History] Erro ao excluir histórico:", error);
+        res.status(500).json({ error: "Erro interno ao excluir histórico do usuário." });
+    }
+});
+
+app.put('/api/user/history/:id/title', requireUser, async (req, res) => {
+    try {
+        const { titulo } = req.body || {};
+        if (!titulo || !titulo.trim()) {
+            return res.status(400).json({ error: "Título não fornecido." });
+        }
+        const username = req.currentUser.username;
+        const sessao = await SessaoChat.findOneAndUpdate(
+            { _id: req.params.id, userId: username },
+            { titulo: titulo.trim() },
+            { new: true }
+        );
+
+        if (!sessao) {
+            return res.status(404).json({ error: "Histórico não encontrado." });
+        }
+
+        res.json({ message: "Título atualizado com sucesso.", titulo: sessao.titulo });
+    } catch (error) {
+        console.error("[User History] Erro ao atualizar título:", error);
+        res.status(500).json({ error: "Erro interno ao atualizar título do usuário." });
     }
 });
 

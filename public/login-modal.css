@@ -97,3 +97,11 @@
     margin-top: 10px;
     display: none;
 }
+
+.login-success {
+    color: var(--success-color);
+    font-size: 0.9em;
+    text-align: center;
+    margin-top: 10px;
+    display: none;
+}

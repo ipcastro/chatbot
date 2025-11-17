@@ -14,9 +14,18 @@ const loginUsername = document.getElementById('login-username');
 const loginPassword = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 const openLoginBtn = document.getElementById('open-login-btn');
+const openRegisterBtn = document.getElementById('open-register-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const authUserLabel = document.getElementById('auth-user-label');
 const loginCancelBtn = document.getElementById('login-cancel-btn');
+const registerModal = document.getElementById('register-modal');
+const registerForm = document.getElementById('register-form');
+const registerUsername = document.getElementById('register-username');
+const registerPassword = document.getElementById('register-password');
+const registerPasswordConfirm = document.getElementById('register-password-confirm');
+const registerError = document.getElementById('register-error');
+const registerSuccess = document.getElementById('register-success');
+const registerCancelBtn = document.getElementById('register-cancel-btn');
 let backToSessions = null; // Será atribuído dinamicamente quando necessário
 
 // Array para armazenar o histórico de conversas para exibição
@@ -30,6 +39,15 @@ let authState = {
     username: null,
     authHeader: null
 };
+
+const DEFAULT_BACKEND_URL = 'https://chatbot-dny3.onrender.com';
+const backendUrl = (() => {
+    const custom = (window.APP_BACKEND_URL || '').trim();
+    if (custom) return custom;
+    const origin = window.location.origin;
+    if (origin && origin.startsWith('http')) return origin;
+    return DEFAULT_BACKEND_URL;
+})();
 
 function encodeBasicAuth(username, password) {
     return 'Basic ' + btoa(unescape(encodeURIComponent(`${username}:${password}`)));
@@ -84,9 +102,29 @@ function hideLoginModal() {
     loginForm?.reset();
 }
 
+function showRegisterModal() {
+    if (!registerModal) return;
+    registerModal.style.display = 'flex';
+    if (registerError) {
+        registerError.style.display = 'none';
+        registerError.textContent = '';
+    }
+    if (registerSuccess) {
+        registerSuccess.style.display = 'none';
+        registerSuccess.textContent = '';
+    }
+    registerForm?.reset();
+}
+
+function hideRegisterModal() {
+    if (!registerModal) return;
+    registerModal.style.display = 'none';
+    registerForm?.reset();
+}
+
 async function verifyCredentials(username, password) {
     const authHeader = encodeBasicAuth(username, password);
-    const res = await fetch('/api/user/preferences', {
+    const res = await fetch(`${backendUrl}/api/user/preferences`, {
         headers: { Authorization: authHeader }
     });
     if (!res.ok) {
@@ -236,6 +274,66 @@ async function handleLoginSubmit(event) {
     }
 }
 
+async function handleRegisterSubmit(event) {
+    event.preventDefault();
+    const username = registerUsername?.value.trim();
+    const password = registerPassword?.value || '';
+    const confirmPassword = registerPasswordConfirm?.value || '';
+    
+    if (!username || !password || !confirmPassword) {
+        if (registerError) {
+            registerError.textContent = 'Preencha usuário, senha e confirmação.';
+            registerError.style.display = 'block';
+        }
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        if (registerError) {
+            registerError.textContent = 'As senhas não conferem.';
+            registerError.style.display = 'block';
+        }
+        return;
+    }
+
+    if (password.trim().length < 6) {
+        if (registerError) {
+            registerError.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+            registerError.style.display = 'block';
+        }
+        return;
+    }
+
+    try {
+        registerError.style.display = 'none';
+        registerSuccess.style.display = 'none';
+
+        const res = await fetch(`${backendUrl}/api/user/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.error || 'Não foi possível criar o usuário.');
+        }
+
+        if (registerSuccess) {
+            registerSuccess.textContent = 'Conta criada com sucesso! Faça login para continuar.';
+            registerSuccess.style.display = 'block';
+        }
+        registerForm?.reset();
+    } catch (error) {
+        if (registerError) {
+            registerError.textContent = error.message || 'Erro ao criar usuário.';
+            registerError.style.display = 'block';
+        }
+    }
+}
+
 // Função para verificar se uma mensagem está relacionada a hora/data
 function isTimeRelatedQuestion(message) {
     const timeQuestions = [
@@ -251,8 +349,6 @@ function isTimeRelatedQuestion(message) {
 // Função para salvar histórico da sessão
 async function salvarHistoricoSessao() {
     try {
-        const backendUrl = 'https://chatbot-dny3.onrender.com';
-        
         // Formata as mensagens garantindo a estrutura correta
         const formattedMessages = apiChatHistory.map(msg => ({
             role: msg.role || (msg.isUser ? 'user' : 'assistant'),
@@ -274,9 +370,12 @@ async function salvarHistoricoSessao() {
             messages: formattedMessages
         };
 
+        const headers = { 'Content-Type': 'application/json' };
+        if (authState.authHeader) headers.Authorization = authState.authHeader;
+
         const response = await fetch(`${backendUrl}/api/chat/salvar-historico`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(payload)
         });
 
@@ -298,9 +397,17 @@ async function salvarHistoricoSessao() {
 // Função para carregar histórico de sessões do backend
 async function updateSessionsList() {
     try {
-        const backendUrl = 'https://chatbot-dny3.onrender.com'; // URL fixa para desenvolvimento local
+        if (!authState.authHeader) {
+            showToast('Faça login para ver seus históricos.', 'error');
+            showLoginModal();
+            return;
+        }
             
-        const response = await fetch(`${backendUrl}/api/chat/historicos`);
+        const response = await fetch(`${backendUrl}/api/user/history`, {
+            headers: {
+                Authorization: authState.authHeader
+            }
+        });
         if (!response.ok) {
             throw new Error(`Erro HTTP: ${response.status}`);
         }
@@ -521,7 +628,6 @@ async function sendMessage() {
         }
         
         // Envia a mensagem para o servidor com o histórico da API
-        const backendUrl = 'https://chatbot-dny3.onrender.com';
         
         // Formata o histórico para garantir consistência e compatibilidade com o modelo
         const formattedHistory = apiChatHistory.map(msg => {
@@ -639,7 +745,7 @@ async function sendMessage() {
 // Função para testar diretamente a função de hora
 async function testTimeFunction() {
     try {
-        const response = await fetch('https://chatbot-dny3.onrender.com/check-time');
+        const response = await fetch(`${backendUrl}/check-time`);
         const data = await response.json();
         console.log("Teste de hora:", data);
         
@@ -665,11 +771,18 @@ async function excluirSessao(sessionId, sessionCard) {
         const result = await showConfirmDialog('Excluir Conversa', 'Tem certeza que deseja excluir esta conversa?');
         if (!result) return;
 
-        const backendUrl = 'https://chatbot-dny3.onrender.com';
+        if (!authState.authHeader) {
+            showToast('Faça login novamente para excluir.', 'error');
+            showLoginModal();
+            return;
+        }
         console.log('Tentando excluir sessão:', sessionId);
         
-        const response = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}`, {
-            method: 'DELETE'
+        const response = await fetch(`${backendUrl}/api/user/history/${sessionId}`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: authState.authHeader
+            }
         });
 
         if (!response.ok) {
@@ -702,11 +815,15 @@ async function excluirSessao(sessionId, sessionCard) {
 
 // Função para obter e salvar o título de uma sessão de chat
 async function obterESalvarTitulo(sessionId, sessionCard) {
-    const backendUrl = 'https://chatbot-dny3.onrender.com';
     const titleElement = sessionCard.querySelector('.session-header h3');
     const originalTitle = titleElement.textContent;
 
     try {
+        if (!authState.authHeader) {
+            showToast('Faça login novamente para renomear.', 'error');
+            showLoginModal();
+            return;
+        }
         // Mostrar dialog personalizado para editar título
         const newTitle = await showEditTitleDialog('Editar Título', originalTitle);
         
@@ -725,10 +842,11 @@ async function obterESalvarTitulo(sessionId, sessionCard) {
         console.log('Salvando novo título para sessão:', sessionId);
         
         // Salvar novo título
-        const saveResponse = await fetch(`${backendUrl}/api/chat/historicos/${sessionId}/${newTitle}`, {
+        const saveResponse = await fetch(`${backendUrl}/api/user/history/${sessionId}/title`, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                Authorization: authState.authHeader
             },
             body: JSON.stringify({ titulo: newTitle })
         });
@@ -887,6 +1005,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners para o histórico - com verificações de existência
     if (historyButton && historyModal) {
         historyButton.addEventListener('click', () => {
+            if (!authState.authHeader) {
+                showToast('Faça login para acessar o histórico.', 'error');
+                showLoginModal();
+                return;
+            }
             historyModal.style.display = 'flex';
             updateSessionsList();
         });
@@ -901,13 +1024,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Fechar histórico ao clicar fora dele
-    historyModal.addEventListener('click', (e) => {
-        if (e.target === historyModal) {
-            historyModal.style.display = 'none';
-            sessionDetails.style.display = 'none';
-            sessionsList.style.display = 'flex';
-        }
-    });
+    if (historyModal) {
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.style.display = 'none';
+                if (sessionDetails) sessionDetails.style.display = 'none';
+                if (sessionsList) sessionsList.style.display = 'flex';
+            }
+        });
+    }
     
     // Inicializar o histórico de conversa com a mensagem de boas-vindas
     if (conversationHistory.length === 0) {
@@ -934,11 +1059,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (openLoginBtn) {
         openLoginBtn.addEventListener('click', showLoginModal);
     }
+    if (openRegisterBtn) {
+        openRegisterBtn.addEventListener('click', showRegisterModal);
+    }
     if (loginCancelBtn) {
         loginCancelBtn.addEventListener('click', hideLoginModal);
     }
+    if (registerCancelBtn) {
+        registerCancelBtn.addEventListener('click', hideRegisterModal);
+    }
     if (loginForm) {
         loginForm.addEventListener('submit', handleLoginSubmit);
+    }
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegisterSubmit);
     }
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
@@ -953,9 +1087,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    if (registerModal) {
+        registerModal.addEventListener('click', (e) => {
+            if (e.target === registerModal) {
+                hideRegisterModal();
+            }
+        });
+    }
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && loginModal?.style.display === 'flex') {
-            hideLoginModal();
+        if (e.key === 'Escape') {
+            if (loginModal?.style.display === 'flex') hideLoginModal();
+            if (registerModal?.style.display === 'flex') hideRegisterModal();
         }
     });
 });

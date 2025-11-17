@@ -239,6 +239,37 @@ app.put('/api/user/preferences', requireUser, async (req, res) => {
   }
 });
 
+// Endpoint protegido para registrar usuários comuns
+app.post('/api/user/register', async (req, res) => {
+  try {
+    if (!User) return res.status(500).json({ error: 'Persistência de usuário indisponível.' });
+    const tokenHeader = req.headers['x-bootstrap-token'] || '';
+    const expectedToken = process.env.ADMIN_BOOTSTRAP_TOKEN || '';
+    if (!expectedToken) return res.status(500).json({ error: 'ADMIN_BOOTSTRAP_TOKEN não configurado.' });
+    if (tokenHeader !== expectedToken) return res.status(403).json({ error: 'Token inválido.' });
+
+    const { username, password } = req.body || {};
+    if (typeof username !== 'string' || !username.trim()) {
+      return res.status(400).json({ error: 'username é obrigatório.' });
+    }
+    if (typeof password !== 'string' || password.trim().length < 6) {
+      return res.status(400).json({ error: 'password deve ter ao menos 6 caracteres.' });
+    }
+
+    const normalizedUsername = username.trim();
+    const existing = await User.findOne({ username: normalizedUsername }).lean();
+    if (existing) return res.status(409).json({ error: 'Usuário já existe.' });
+
+    const passwordHash = await bcrypt.hash(password.trim(), 10);
+    await User.create({ username: normalizedUsername, passwordHash });
+
+    res.status(201).json({ message: 'Usuário criado com sucesso.' });
+  } catch (error) {
+    console.error('[User Register] Erro ao cadastrar usuário:', error);
+    res.status(500).json({ error: 'Erro ao registrar usuário.' });
+  }
+});
+
 // Endpoint para atualizar a senha de admin (requer senha atual)
 app.post('/api/admin/password', requireAdmin, async (req, res) => {
     try {

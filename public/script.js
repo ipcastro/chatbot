@@ -8,6 +8,15 @@ const historyModal = document.getElementById('history-modal-overlay');
 const historyClose = document.getElementById('history-close');
 const sessionsList = document.getElementById('sessions-list');
 const sessionDetails = document.getElementById('session-details');
+const loginModal = document.getElementById('login-modal');
+const loginForm = document.getElementById('login-form');
+const loginUsername = document.getElementById('login-username');
+const loginPassword = document.getElementById('login-password');
+const loginError = document.getElementById('login-error');
+const openLoginBtn = document.getElementById('open-login-btn');
+const logoutBtn = document.getElementById('logout-btn');
+const authUserLabel = document.getElementById('auth-user-label');
+const loginCancelBtn = document.getElementById('login-cancel-btn');
 let backToSessions = null; // Será atribuído dinamicamente quando necessário
 
 // Array para armazenar o histórico de conversas para exibição
@@ -15,6 +24,97 @@ const conversationHistory = [];
 
 // Array para armazenar o histórico no formato da API
 let apiChatHistory = [];
+
+const AUTH_STORAGE_KEY = 'chatbotAuth';
+let authState = {
+    username: null,
+    authHeader: null
+};
+
+function encodeBasicAuth(username, password) {
+    return 'Basic ' + btoa(unescape(encodeURIComponent(`${username}:${password}`)));
+}
+
+function updateAuthUI() {
+    if (!authUserLabel || !openLoginBtn || !logoutBtn) return;
+    if (authState.username) {
+        authUserLabel.textContent = `Conectado como ${authState.username}`;
+        logoutBtn.classList.remove('hidden');
+        openLoginBtn.textContent = 'Trocar usuário';
+    } else {
+        authUserLabel.textContent = 'Você não está conectado.';
+        logoutBtn.classList.add('hidden');
+        openLoginBtn.textContent = 'Entrar';
+    }
+}
+
+function persistAuthState() {
+    if (authState.username && authState.authHeader) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+    } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+}
+
+function setAuthState(username, authHeader) {
+    authState = { username, authHeader };
+    persistAuthState();
+    updateAuthUI();
+}
+
+function clearAuthState() {
+    authState = { username: null, authHeader: null };
+    persistAuthState();
+    updateAuthUI();
+}
+
+function showLoginModal() {
+    if (!loginModal) return;
+    loginModal.style.display = 'flex';
+    if (loginError) {
+        loginError.style.display = 'none';
+        loginError.textContent = '';
+    }
+    loginForm?.reset();
+}
+
+function hideLoginModal() {
+    if (!loginModal) return;
+    loginModal.style.display = 'none';
+    loginForm?.reset();
+}
+
+async function verifyCredentials(username, password) {
+    const authHeader = encodeBasicAuth(username, password);
+    const res = await fetch('/api/user/preferences', {
+        headers: { Authorization: authHeader }
+    });
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Usuário ou senha inválidos.');
+    }
+    return authHeader;
+}
+
+function restoreAuthFromStorage() {
+    try {
+        const data = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!data) {
+            updateAuthUI();
+            return;
+        }
+        const parsed = JSON.parse(data);
+        if (parsed?.username && parsed?.authHeader) {
+            authState = parsed;
+        }
+    } catch (error) {
+        console.warn('Não foi possível restaurar credenciais salvas.', error);
+    } finally {
+        updateAuthUI();
+    }
+}
+
+restoreAuthFromStorage();
 
 // Função para formatar mensagem para o histórico da API
 function formatMessageForHistory(message, isUser) {
@@ -108,6 +208,34 @@ function showError(message) {
     scrollToBottom();
 }
 
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+    const username = loginUsername?.value.trim();
+    const password = loginPassword?.value || '';
+    if (!username || !password) {
+        if (loginError) {
+            loginError.textContent = 'Informe usuário e senha para entrar.';
+            loginError.style.display = 'block';
+        }
+        return;
+    }
+    try {
+        if (loginError) {
+            loginError.textContent = '';
+            loginError.style.display = 'none';
+        }
+        const authHeader = await verifyCredentials(username, password);
+        setAuthState(username, authHeader);
+        hideLoginModal();
+        showToast('Login realizado com sucesso!');
+    } catch (error) {
+        if (loginError) {
+            loginError.textContent = error.message || 'Não foi possível fazer login.';
+            loginError.style.display = 'block';
+        }
+    }
+}
+
 // Função para verificar se uma mensagem está relacionada a hora/data
 function isTimeRelatedQuestion(message) {
     const timeQuestions = [
@@ -139,7 +267,7 @@ async function salvarHistoricoSessao() {
             
         const payload = {
             sessionId: currentSessionId,
-            userId: 'anonimo',
+            userId: authState.username || 'anonimo',
             botId: "IFCODE SuperBot",
             startTime: chatStartTime.toISOString(),
             endTime: new Date().toISOString(),
@@ -368,6 +496,11 @@ function toggleHistorico() {
 async function sendMessage() {
     const message = userInput.value.trim();
     if (!message) return;
+    if (!authState.authHeader) {
+        showToast('Faça login para conversar com o bot.', 'error');
+        showLoginModal();
+        return;
+    }
 
     // Desabilita o input e o botão durante o processamento
     userInput.disabled = true;
@@ -444,7 +577,8 @@ async function sendMessage() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': authState.authHeader
             },
             body: JSON.stringify(requestBody)
         });
@@ -796,4 +930,32 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Configurar o foco inicial
     userInput.focus();
+
+    if (openLoginBtn) {
+        openLoginBtn.addEventListener('click', showLoginModal);
+    }
+    if (loginCancelBtn) {
+        loginCancelBtn.addEventListener('click', hideLoginModal);
+    }
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLoginSubmit);
+    }
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            clearAuthState();
+            showToast('Você saiu da conta.');
+        });
+    }
+    if (loginModal) {
+        loginModal.addEventListener('click', (e) => {
+            if (e.target === loginModal) {
+                hideLoginModal();
+            }
+        });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && loginModal?.style.display === 'flex') {
+            hideLoginModal();
+        }
+    });
 });

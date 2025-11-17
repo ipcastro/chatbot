@@ -7,12 +7,20 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="history-modal.css">
     <link rel="stylesheet" href="personality-styles.css">
+    <link rel="stylesheet" href="login-modal.css">
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
             <h1>Chatbot Musical</h1>
             <p>Seu guia musical virtual</p>
+            <div class="auth-status">
+                <span id="auth-user-label">Você não está conectado.</span>
+                <div class="auth-actions">
+                    <button id="open-login-btn">Entrar</button>
+                    <button id="logout-btn" class="hidden">Sair</button>
+                </div>
+            </div>
         </div>
         <div class="personality-section">
             <h2>Escolha a personalidade do chatbot:</h2>
@@ -66,6 +74,25 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
             <div id="session-details" class="session-details" style="display: none;">
                 <!-- Detalhes da sessão serão inseridos aqui via JavaScript -->
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Login -->
+    <div id="login-modal" class="login-modal">
+        <div class="login-content">
+            <div class="login-header">
+                <h2>Entrar na sua conta</h2>
+                <p>Use as mesmas credenciais que você cadastrou no sistema.</p>
+            </div>
+            <form id="login-form" class="login-form">
+                <input type="text" id="login-username" placeholder="Usuário" autocomplete="username">
+                <input type="password" id="login-password" placeholder="Senha" autocomplete="current-password">
+                <div class="login-buttons">
+                    <button type="button" class="btn-cancel" id="login-cancel-btn">Cancelar</button>
+                    <button type="submit" class="btn-login">Entrar</button>
+                </div>
+                <div id="login-error" class="login-error"></div>
+            </form>
         </div>
     </div>
     

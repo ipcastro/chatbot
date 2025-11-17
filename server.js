@@ -472,14 +472,39 @@ app.post('/chat', optionalUserFromAuth, async (req, res) => {
       },
     });
 
+    // Determina a instrução correta respeitando a hierarquia Usuário > Global > Default
+    let resolvedSystemInstruction = defaultSystemInstruction;
+    try {
+      const globalInstruction = await getGlobalSystemInstruction();
+      if (typeof globalInstruction === 'string' && globalInstruction.trim()) {
+        resolvedSystemInstruction = globalInstruction.trim();
+      }
+      const userInstruction = req.currentUser?.systemInstruction;
+      if (typeof userInstruction === 'string' && userInstruction.trim()) {
+        resolvedSystemInstruction = userInstruction.trim();
+      }
+    } catch (instructionError) {
+      console.error('[SystemInstruction] Erro ao resolver instrução:', instructionError);
+    }
+
     // Força o modelo a responder em português (usar role 'system' para maior prioridade)
     const languageInstruction = {
       role: 'system',
       parts: [{ text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.' }]
     };
 
-    // Inicializa o chat sem histórico primeiro
+    const systemMessages = [];
+    if (resolvedSystemInstruction && resolvedSystemInstruction.trim()) {
+      systemMessages.push({
+        role: 'system',
+        parts: [{ text: resolvedSystemInstruction.trim() }]
+      });
+    }
+    systemMessages.push(languageInstruction);
+
+    // Inicializa o chat já com as instruções de sistema aplicadas
     const chat = model.startChat({
+      history: systemMessages,
       generationConfig: {
         temperature: 0.7,
         top_p: 0.8,

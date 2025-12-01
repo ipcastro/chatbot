@@ -64,6 +64,29 @@ function updateAuthUI() {
         logoutBtn.classList.add('hidden');
         openLoginBtn.textContent = 'Entrar';
     }
+    // Atualiza o estado locked das personalidades
+    updatePersonalitiesLockState();
+}
+
+// Atualiza o estado locked das personalidades baseado no login
+function updatePersonalitiesLockState() {
+    const personalitySection = document.querySelector('.personality-section');
+    const personalityOptions = document.querySelector('.personality-options');
+    const personalityButtons = document.querySelectorAll('.personality-button');
+    
+    if (!personalitySection || !personalityOptions || personalityButtons.length === 0) return;
+    
+    const isLoggedIn = authState.username !== null;
+    
+    if (isLoggedIn) {
+        personalitySection.classList.remove('locked');
+        personalityOptions.classList.remove('locked');
+        personalityButtons.forEach(btn => btn.classList.remove('locked'));
+    } else {
+        personalitySection.classList.add('locked');
+        personalityOptions.classList.add('locked');
+        personalityButtons.forEach(btn => btn.classList.add('locked'));
+    }
 }
 
 function persistAuthState() {
@@ -83,6 +106,11 @@ function setAuthState(username, authHeader) {
 function clearAuthState() {
     authState = { username: null, authHeader: null };
     persistAuthState();
+    // Reseta a personalidade ao fazer logout
+    if (typeof currentPersonality !== 'undefined') {
+        currentPersonality = null;
+    }
+    localStorage.removeItem('selectedPersonality');
     updateAuthUI();
 }
 
@@ -1001,6 +1029,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error('Elementos essenciais do chat não encontrados');
     }
+    
+    // Atualiza o estado locked das personalidades na inicialização
+    updatePersonalitiesLockState();
     
     // Event listeners para o histórico - com verificações de existência
     if (historyButton && historyModal) {

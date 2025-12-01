@@ -1,0 +1,100 @@
+/* Estilos para personalidades quando não há login */
+
+/* Desabilitar botões de personalidade quando não conectado */
+.personality-section.locked {
+    opacity: 0.6;
+    pointer-events: auto;
+}
+
+.personality-section.locked .personality-button {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #8b8b8b 0%, #a0a0a0 100%);
+    border: 2px solid #666;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.personality-section.locked .personality-button:hover {
+    opacity: 0.6;
+    background: linear-gradient(135deg, #a0a0a0 0%, #b0b0b0 100%);
+    transform: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.personality-section.locked .personality-button span {
+    filter: grayscale(60%);
+    opacity: 0.8;
+}
+
+/* Bloqueio visual no botão de criar personalidade */
+.personality-section.locked .add-custom::before {
+    content: '🔒';
+    margin-right: 5px;
+    font-size: 1.1em;
+}
+
+/* Mensagem de aviso quando não conectado */
+.personality-section::before {
+    content: '';
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 4px solid #ff9800;
+    border-radius: 4px;
+    color: #ff9800;
+    font-size: 0.9em;
+    font-weight: 500;
+    text-align: center;
+    box-sizing: border-box;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.personality-section.locked::before {
+    content: '🔐 Você precisa estar logado para escolher uma personalidade';
+    opacity: 1;
+    max-height: 50px;
+}
+
+/* Efeito visual sutil quando está locked */
+.personality-options.locked {
+    filter: brightness(0.95);
+    transition: all 0.3s ease;
+}
+
+/* Tooltip ao passar o mouse (opcional) */
+.personality-button.locked:hover::after {
+    content: 'Faça login para usar';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    margin-bottom: 8px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Animação sutil de pulsação para botões locked */
+@keyframes pulse-locked {
+    0%, 100% {
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.personality-button.locked {
+    animation: pulse-locked 2s ease-in-out infinite;
+}

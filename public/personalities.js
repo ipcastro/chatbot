@@ -88,8 +88,23 @@ async function updatePersonality(personality) {
     }
 }
 
+// Verifica se o usuário está logado
+function isUserLoggedIn() {
+    const authState = localStorage.getItem('chatbotAuth');
+    return authState ? JSON.parse(authState).username : null;
+}
+
 // Abre o modal para criar personalidade customizada
 function openCustomPersonalityModal() {
+    const loggedInUser = isUserLoggedIn();
+    if (!loggedInUser) {
+        showError('⚠️ Você precisa estar logado para criar personalidades customizadas!');
+        // Abre o modal de login
+        const openLoginBtn = document.getElementById('open-login-btn');
+        if (openLoginBtn) openLoginBtn.click();
+        return;
+    }
+    
     const modal = document.getElementById('custom-personality-modal');
     modal.style.display = 'flex';
     document.getElementById('custom-personality-form').reset();
@@ -162,6 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const personalityButtons = document.querySelectorAll('.personality-button:not(.add-custom)');
     personalityButtons.forEach(button => {
         button.addEventListener('click', () => {
+            const loggedInUser = isUserLoggedIn();
+            if (!loggedInUser) {
+                showError('⚠️ Você precisa estar logado para escolher uma personalidade!');
+                const openLoginBtn = document.getElementById('open-login-btn');
+                if (openLoginBtn) openLoginBtn.click();
+                return;
+            }
             const personality = button.dataset.personality;
             if (personality !== currentPersonality) {
                 updatePersonality(personality);

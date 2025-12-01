@@ -139,6 +139,58 @@ async function requireUser(req, res, next) {
   }
 }
 
+function sanitizeHistoryEntries(rawHistory) {
+  if (!Array.isArray(rawHistory)) return [];
+  const sanitized = [];
+  for (const entry of rawHistory) {
+    try {
+      if (!entry) continue;
+
+      if (typeof entry === 'string') {
+        const text = entry.trim();
+        if (text) {
+          sanitized.push({
+            role: 'user',
+            parts: [{ text }]
+          });
+        }
+        continue;
+      }
+
+      let role = entry.role;
+      if (role === 'assistant' || role === 'bot') role = 'model';
+      if (role !== 'user' && role !== 'model') continue;
+
+      const parts = [];
+      if (Array.isArray(entry.parts)) {
+        for (const part of entry.parts) {
+          if (part && typeof part.text === 'string') {
+            const trimmed = part.text.trim();
+            if (trimmed) parts.push({ text: trimmed });
+          }
+        }
+      }
+
+      if (!parts.length) {
+        const fallbackText = (typeof entry.message === 'string' && entry.message.trim())
+          ? entry.message.trim()
+          : (typeof entry.text === 'string' && entry.text.trim())
+            ? entry.text.trim()
+            : null;
+        if (fallbackText) {
+          parts.push({ text: fallbackText });
+        }
+      }
+
+      if (!parts.length) continue;
+      sanitized.push({ role, parts });
+    } catch (historyError) {
+      console.error('[HistorySanitizer] Erro ao sanitizar entrada do histórico:', historyError);
+    }
+  }
+  return sanitized;
+}
+
 async function setGlobalSystemInstruction(text) {
     if (typeof text !== 'string' || text.trim().length === 0) {
         throw new Error('Instrução inválida.');
@@ -487,6 +539,8 @@ app.post('/chat', optionalUserFromAuth, async (req, res) => {
       });
     }
 
+    const sanitizedHistory = sanitizeHistoryEntries(history);
+
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{
@@ -514,47 +568,32 @@ app.post('/chat', optionalUserFromAuth, async (req, res) => {
       console.error('[SystemInstruction] Erro ao resolver instrução:', instructionError);
     }
 
-    // Força o modelo a responder em português (usar role 'system' para maior prioridade)
-    const languageInstruction = {
-      role: 'system',
-      parts: [{ text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.' }]
-    };
-
-    const systemMessages = [];
+    const systemInstructionParts = [];
     if (resolvedSystemInstruction && resolvedSystemInstruction.trim()) {
-      systemMessages.push({
-        role: 'system',
-        parts: [{ text: resolvedSystemInstruction.trim() }]
-      });
+      systemInstructionParts.push({ text: resolvedSystemInstruction.trim() });
     }
-    systemMessages.push(languageInstruction);
+    systemInstructionParts.push({
+      text: 'Você DEVE responder SEMPRE em português do Brasil, de forma amigável e informal, como se estivesse conversando com um amigo.'
+    });
 
-    // Inicializa o chat já com as instruções de sistema aplicadas
-    const chat = model.startChat({
-      history: systemMessages,
+    const chatOptions = {
+      history: sanitizedHistory,
       generationConfig: {
         temperature: 0.7,
         top_p: 0.8,
         top_k: 40
       },
-    });
+    };
 
-    // Adiciona cada mensagem do histórico sequencialmente
-    if (history && history.length > 0) {
-      for (const msg of history) {
-        try {
-          const text = typeof msg === 'string' ? msg :
-                      msg.message || msg.text ||
-                      (msg.parts && msg.parts[0] && msg.parts[0].text) ||
-                      JSON.stringify(msg);
-          
-          await chat.sendMessage(text);
-        } catch (historyError) {
-          console.error("Erro ao processar mensagem do histórico:", historyError);
-          // Continua mesmo se houver erro em uma mensagem do histórico
-        }
-      }
+    if (systemInstructionParts.length > 0) {
+      chatOptions.systemInstruction = {
+        role: 'system',
+        parts: systemInstructionParts
+      };
     }
+
+    // Inicializa o chat com o histórico e instruções sanitizados
+    const chat = model.startChat(chatOptions);
 
     let currentApiRequestContents = message;
     let modelResponse;

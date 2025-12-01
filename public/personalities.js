@@ -59,6 +59,14 @@ function saveCustomPersonalities() {
 // Função para atualizar a personalidade do chatbot
 async function updatePersonality(personality) {
     try {
+        // Impedir alteração se usuário não estiver logado
+        const loggedInUser = isUserLoggedIn();
+        if (!loggedInUser) {
+            showError('⚠️ Você precisa estar logado para escolher uma personalidade!');
+            const openLoginBtn = document.getElementById('open-login-btn');
+            if (openLoginBtn) openLoginBtn.click();
+            return;
+        }
         // Armazena a personalidade no localStorage para persistência
         localStorage.setItem('selectedPersonality', personality);
 
@@ -154,6 +162,9 @@ async function createCustomPersonality(name, emoji, instruction) {
         const addCustomBtn = document.getElementById('btn-add-custom');
         addCustomBtn.parentNode.insertBefore(newButton, addCustomBtn);
 
+    // Atualiza estado dos botões (caso haja mudança de login/lock)
+    if (typeof updatePersonalitiesLockState === 'function') updatePersonalitiesLockState();
+
         // Fecha o modal
         closeCustomPersonalityModal();
 
@@ -172,6 +183,8 @@ async function createCustomPersonality(name, emoji, instruction) {
 document.addEventListener('DOMContentLoaded', () => {
     // Carrega personalidades customizadas do localStorage
     loadCustomPersonalities();
+    // Atualiza estado dos botões (bloqueia se não estiver logado)
+    updatePersonalitiesLockState();
 
     // Event listeners para botões de personalidade predefinida
     const personalityButtons = document.querySelectorAll('.personality-button:not(.add-custom)');
@@ -238,9 +251,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (nameInput) nameInput.addEventListener('input', updateCharacterCounts);
     if (instructionInput) instructionInput.addEventListener('input', updateCharacterCounts);
 
-    // Restaura personalidade anterior se existir
+    // Restaura personalidade anterior se existir, somente se o usuário estiver logado
     const savedPersonality = localStorage.getItem('selectedPersonality');
-    if (savedPersonality && personalities[savedPersonality]) {
+    if (isUserLoggedIn() && savedPersonality && personalities[savedPersonality]) {
         updatePersonality(savedPersonality);
     }
 });

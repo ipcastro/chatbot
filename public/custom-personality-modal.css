@@ -1,0 +1,178 @@
+.custom-personality-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+
+.custom-personality-content {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.custom-personality-header {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.custom-personality-header h2 {
+    color: #ba68c8;
+    margin: 0 0 10px 0;
+    font-size: 1.5em;
+}
+
+.custom-personality-header p {
+    color: #999;
+    margin: 0;
+    font-size: 0.9em;
+}
+
+.custom-personality-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    color: #4a148c;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.form-group input,
+.form-group textarea {
+    padding: 10px 12px;
+    border: 1px solid #ba68c8;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #4a148c;
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #ce93d8;
+    box-shadow: 0 0 0 3px rgba(186, 104, 200, 0.2);
+}
+
+.form-group textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #ccc;
+}
+
+.character-count {
+    font-size: 0.8em;
+    color: #999;
+    text-align: right;
+    margin-top: 5px;
+}
+
+.custom-personality-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.custom-personality-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.btn-create-custom {
+    background: linear-gradient(45deg, #ba68c8, #ce93d8);
+    color: white;
+}
+
+.btn-create-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(186, 104, 200, 0.4);
+}
+
+.btn-cancel-custom {
+    background: #f0f0f0;
+    color: #666;
+}
+
+.btn-cancel-custom:hover {
+    background: #e0e0e0;
+}
+
+.custom-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    color: #856404;
+    margin-bottom: 10px;
+}
+
+.personality-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.personality-button.add-custom {
+    background: linear-gradient(45deg, #ba68c8, #ce93d8);
+    color: white;
+    border: 2px dashed white;
+}
+
+.personality-button.add-custom:hover {
+    border-color: #ce93d8;
+    transform: scale(1.05);
+}
+
+.personality-button.add-custom span {
+    font-size: 20px;
+}
+
+@media (max-width: 768px) {
+    .custom-personality-content {
+        width: 95%;
+        padding: 20px;
+    }
+
+    .custom-personality-header h2 {
+        font-size: 1.2em;
+    }
+
+    .custom-personality-buttons {
+        flex-direction: column;
+    }
+
+    .custom-personality-buttons button {
+        width: 100%;
+    }
+}

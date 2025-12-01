@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="history-modal.css">
     <link rel="stylesheet" href="personality-styles.css">
+    <link rel="stylesheet" href="custom-personality-modal.css">
     <link rel="stylesheet" href="login-modal.css">
 </head>
 <body>
@@ -40,6 +41,9 @@
                 </button>
                 <button class="personality-button" data-personality="historiador">
                     <span>📚</span> Historiador Musical
+                </button>
+                <button class="personality-button add-custom" id="btn-add-custom">
+                    <span>✨</span> Criar Personalidade
                 </button>
             </div>
         </div>
@@ -75,6 +79,67 @@ O que você gostaria de saber sobre o maravilhoso mundo da música? Você també
             <div id="session-details" class="session-details" style="display: none;">
                 <!-- Detalhes da sessão serão inseridos aqui via JavaScript -->
             </div>
+        </div>
+    </div>
+
+    <!-- Modal para Criar Personalidade Customizada -->
+    <div id="custom-personality-modal" class="custom-personality-modal">
+        <div class="custom-personality-content">
+            <div class="custom-personality-header">
+                <h2>✨ Crie Sua Personalidade</h2>
+                <p>Personalize como o chatbot vai conversar com você</p>
+            </div>
+
+            <div class="custom-warning">
+                💡 Dica: Quanto mais detalhada a descrição, melhor o bot entenderá como agir!
+            </div>
+
+            <form id="custom-personality-form" class="custom-personality-form">
+                <div class="form-group">
+                    <label for="custom-name">Nome da Personalidade</label>
+                    <input 
+                        type="text" 
+                        id="custom-name" 
+                        placeholder="Ex: Consultor Estratégico, Coach Musical, etc."
+                        maxlength="30"
+                        required
+                    >
+                    <div class="character-count">
+                        <span id="name-count">0</span>/30 caracteres
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="custom-emoji">Emoji (opcional)</label>
+                    <input 
+                        type="text" 
+                        id="custom-emoji" 
+                        placeholder="Ex: 🎯 ou 💡"
+                        maxlength="2"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="custom-instruction">Descrição da Personalidade</label>
+                    <textarea 
+                        id="custom-instruction" 
+                        placeholder="Descreva como o bot deve agir. Ex: Você é um consultor estratégico que ajuda a encontrar o melhor caminho para objetivos musicais. Seja direto, prático e use exemplos reais."
+                        required
+                    ></textarea>
+                    <div class="character-count">
+                        <span id="instruction-count">0</span>/500 caracteres
+                    </div>
+                </div>
+
+                <div class="custom-personality-buttons">
+                    <button type="button" class="btn-cancel-custom" id="btn-cancel-custom">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn-create-custom">
+                        ✨ Criar & Usar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
